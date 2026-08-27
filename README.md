@@ -1,433 +1,413 @@
-# 🛡️ Ransomware Monitor
+# 🛡️ Cyber Threat Hub
 
-> Plataforma web para monitoramento de ataques de ransomware, desenvolvida para a disciplina de **Integração DevOps — UniCEUB**.
+<div align="center">
 
-O **Ransomware Monitor** é uma aplicação voltada para a coleta, centralização e visualização de informações sobre ataques de ransomware provenientes de diferentes fontes de inteligência.
+### Plataforma de Cyber Threat Intelligence para monitoramento de ameaças cibernéticas
 
-A plataforma também identifica incidentes relacionados ao **Brasil 🇧🇷** e foi projetada para realizar alertas automáticos através de diferentes canais de comunicação.
+![Node.js](https://img.shields.io/badge/Node.js-Backend-339933?logo=node.js\&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?logo=javascript\&logoColor=black)
+![HTML5](https://img.shields.io/badge/HTML5-Frontend-E34F26?logo=html5\&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-Frontend-1572B6?logo=css3\&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?logo=sqlite\&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker\&logoColor=white)
 
----
+**Cyber Threat Intelligence • Ransomware • CVEs • Cybersecurity News • Alertas**
 
-## 🎯 Objetivo
-
-Centralizar informações sobre ataques de ransomware em uma única interface, permitindo acompanhar novos incidentes e identificar rapidamente ataques envolvendo organizações brasileiras.
-
-O sistema utiliza dados provenientes de:
-
-* 🟥 Ransomware.Live
-* 🟥 RansomFeed
-* 🟥 RansomLook
-
-Os dados coletados são normalizados, tratados para evitar duplicidades e armazenados localmente em **SQLite**.
+</div>
 
 ---
 
-## 🚨 Alertas de ataques no Brasil
+## 📖 Sobre o Projeto
 
-Quando um novo incidente relacionado ao Brasil for identificado, o sistema poderá realizar notificações através de:
+O **Cyber Threat Hub** é uma plataforma de **Cyber Threat Intelligence (CTI)** desenvolvida para centralizar informações sobre ameaças cibernéticas.
 
-* 📧 E-mail
-* ✈️ Telegram
-* 💬 Microsoft Teams
-* 🎮 Discord
+A aplicação coleta e organiza dados provenientes de diferentes fontes para permitir o acompanhamento de **ataques de ransomware, vulnerabilidades, notícias de cibersegurança e incidentes relacionados ao Brasil**.
 
-O sistema mantém o controle dos alertas enviados para evitar notificações duplicadas do mesmo incidente.
+Quando um novo ataque de ransomware envolvendo uma organização brasileira é identificado, a plataforma pode gerar alertas automaticamente por **E-mail, Telegram e Microsoft Teams**.
 
 ---
 
-## 🖥️ Threat Feed
+## ✨ Funcionalidades
 
-A interface apresenta os incidentes de ransomware através de um **Threat Feed** em tempo real, utilizando uma identidade visual inspirada em plataformas de Cyber Threat Intelligence.
-
-Cada incidente pode apresentar informações como:
-
-* Grupo de ransomware
-* Vítima
-* País
-* Data
-* Fonte da informação
-
-Também são disponibilizados filtros e pesquisa para facilitar a análise dos incidentes.
+* 📊 **Dashboard** com métricas e gráficos de ameaças;
+* 📰 **CyberSec News** com notícias de cibersegurança via RSS;
+* 🚨 **Threat Feed** para monitoramento de ransomware;
+* 🇧🇷 Detecção automática de ataques relacionados ao Brasil;
+* 🛡️ Monitoramento de vulnerabilidades e CVEs;
+* 🔎 Pesquisa de notícias, ameaças e vulnerabilidades;
+* 📧 Alertas por E-mail;
+* ✈️ Alertas pelo Telegram;
+* 🟣 Alertas pelo Microsoft Teams;
+* 🗃️ Armazenamento local utilizando SQLite;
+* 🔄 Atualização automática das fontes de inteligência;
+* ⚙️ Painel para configuração das integrações.
 
 ---
 
-## 🛠️ Tecnologias
+## 🌐 Fontes de Inteligência
 
-### Aplicação
+O projeto utiliza diferentes fontes para coleta e correlação das informações:
 
-![HTML5](https://img.shields.io/badge/HTML5-Frontend-orange?logo=html5)
-![CSS3](https://img.shields.io/badge/CSS3-Style-blue?logo=css3)
-![JavaScript](https://img.shields.io/badge/JavaScript-Frontend-yellow?logo=javascript)
-![Node.js](https://img.shields.io/badge/Node.js-Backend-green?logo=node.js)
-![Express](https://img.shields.io/badge/Express.js-API-black?logo=express)
-![SQLite](https://img.shields.io/badge/SQLite-Database-blue?logo=sqlite)
+| Fonte               | Finalidade                            |
+| ------------------- | ------------------------------------- |
+| **Ransomware.Live** | Incidentes e vítimas de ransomware    |
+| **RansomFeed**      | Fonte complementar de ransomware      |
+| **NIST NVD**        | Vulnerabilidades e CVEs               |
+| **CVEFeed.io**      | Informações complementares sobre CVEs |
+| **Feeds RSS**       | Notícias de cibersegurança            |
+
+As notícias são coletadas de fontes como **The Hacker News, CyberSecurity News, SecurityWeek, BleepingComputer, Krebs on Security, Dark Reading e CISO Advisor**.
+
+---
+
+## 🇧🇷 Detecção e Alertas
+
+Durante a coleta de novos incidentes, o backend verifica o país associado à vítima.
+
+Registros identificados como:
+
+```text
+BR
+Brazil
+Brasil
+```
+
+são tratados como incidentes brasileiros.
+
+Quando um novo incidente do Brasil é identificado, a plataforma pode distribuir automaticamente o alerta através de:
+
+```text
+Novo ataque detectado
+        │
+        ├──► 📧 E-mail
+        ├──► ✈️ Telegram
+        └──► 🟣 Microsoft Teams
+```
+
+O sistema também verifica os registros existentes para evitar o armazenamento duplicado de uma mesma ameaça.
+
+---
+
+## 🧰 Tecnologias
+
+### Frontend
+
+* HTML5
+* CSS3
+* JavaScript
+* Chart.js
+* Font Awesome
+
+### Backend
+
+* Node.js
+* Express.js
+* Axios
+* Nodemailer
+* RSS Parser
+* SQLite3
+* Dotenv
 
 ### DevOps
 
-![Git](https://img.shields.io/badge/Git-Versionamento-orange?logo=git)
-![GitHub](https://img.shields.io/badge/GitHub-Repositório-black?logo=github)
-![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI%2FCD-blue?logo=githubactions)
-![Docker](https://img.shields.io/badge/Docker-Container-blue?logo=docker)
+* Git / GitHub (Trunk-Based Development e Conventional Commits)
+* GitHub Actions (CI/CD Pipeline)
+* Docker
+* Docker Compose
+* Jest (Testes Automatizados)
 
-### DevSecOps e Observabilidade
+---
 
-![Trivy](https://img.shields.io/badge/Trivy-Security-blue)
-![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-orange?logo=prometheus)
-![Grafana](https://img.shields.io/badge/Grafana-Dashboard-orange?logo=grafana)
+## 🔄 Estratégia Git e Integração Contínua (CI)
+
+Este projeto adota o modelo **Trunk-Based Development** com as seguintes regras de proteção na branch `main`:
+1. Push direto é desabilitado.
+2. É obrigatório criar um Pull Request para aprovação.
+3. O Pull Request só pode ser aceito após todos os **Testes Automatizados (Jest)** passarem com sucesso no **GitHub Actions (CI)**.
+
+Utilizamos **Conventional Commits** para manter o histórico de alterações rastreável. Mais detalhes no `CONTRIBUTING.md`.
+
+Para executar os testes localmente:
+```bash
+cd backend
+npm test
+```
 
 ---
 
 ## 🏗️ Arquitetura
 
 ```text
-Ransomware.Live ─┐
-RansomFeed ──────┼────► Node.js / Express
-RansomLook ──────┘             │
-                               ▼
-                       Normalização
-                               │
-                       Deduplicação
-                               │
-                               ▼
-                            SQLite
-                               │
-                ┌──────────────┴──────────────┐
-                │                             │
-                ▼                             ▼
-         HTML / CSS / JS              Ataque é do Brasil?
-          Threat Feed                       │
-                                           SIM
-                                            │
-                         ┌──────────┬────────┼────────┐
-                         ▼          ▼        ▼        ▼
-                       E-mail    Telegram   Teams   Discord
+ Ransomware.Live ──┐
+ RansomFeed ───────┤
+ NIST NVD ─────────┤
+ CVEFeed.io ───────┼──► Node.js + Express ──► SQLite
+ RSS Feeds ────────┘             │
+                                 │
+                       ┌─────────┴─────────┐
+                       ▼                   ▼
+                    Frontend            Alertas
+                HTML + CSS + JS     E-mail / Telegram
+                                         / Teams
 ```
 
 ---
 
-## 📂 Estrutura do projeto
+# 🚀 Instalação
 
-```text
-ransomware-monitor/
-│
-├── src/
-│   ├── config/
-│   ├── controllers/
-│   ├── routes/
-│   ├── services/
-│   ├── database/
-│   ├── integrations/
-│   ├── alerts/
-│   ├── middleware/
-│   ├── metrics/
-│   └── server.js
-│
-├── public/
-│   ├── index.html
-│   ├── css/
-│   └── js/
-│
-├── tests/
-│
-├── monitoring/
-│   ├── prometheus/
-│   └── grafana/
-│
-├── .github/
-│   └── workflows/
-│
-├── .env.example
-├── .gitignore
-├── Dockerfile
-├── docker-compose.yml
-├── package.json
-└── README.md
-```
+## 1. Pré-requisitos
 
-> A estrutura poderá sofrer alterações durante a evolução do projeto.
+Tenha instalado:
 
----
+* Node.js
+* npm
+* Git
+* Docker Desktop *(opcional)*
 
-## ⚙️ Executando o projeto
-
-### 1. Clone o repositório
+## 2. Clone o projeto
 
 ```bash
-git clone URL_DO_REPOSITORIO
-cd ransomware-monitor
+git clone https://github.com/ArthurNeiva017/Projeto-CyberThreatHub.git
+cd Projeto-CyberThreatHub
 ```
 
-### 2. Instale as dependências
-
-Certifique-se de possuir o **Node.js** instalado.
+## 3. Instale as dependências
 
 ```bash
+cd backend
 npm install
 ```
 
-### 3. Configure as variáveis de ambiente
+---
 
-Crie um arquivo `.env` utilizando `.env.example` como referência.
+# 🔑 Configuração das APIs
+
+Dentro da pasta `backend`, crie um arquivo chamado:
+
+```text
+.env
+```
+
+Configure suas próprias credenciais:
 
 ```env
-PORT=3000
+# E-mail
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=seu_email@gmail.com
+SMTP_PASS=sua_senha_de_aplicativo
+ALERT_EMAIL_TO="email1@exemplo.com, email2@exemplo.com"
 
-EMAIL_USER=
-EMAIL_PASSWORD=
+# Telegram
+TELEGRAM_BOT_TOKEN=seu_token
+TELEGRAM_CHAT_ID=seu_chat_id
 
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
+# Ransomware.Live
+RANSOMWARE_LIVE_API_KEY=sua_api_key
 
-DISCORD_WEBHOOK_URL=
-
-TEAMS_WEBHOOK_URL=
-
-ALERTS_ENABLED=false
+# Microsoft Teams
+TEAMS_WEBHOOK_URL=sua_url_do_webhook
 ```
 
-> ⚠️ Nunca envie o arquivo `.env` para o GitHub.
+### 📧 Gmail
+
+Utilize uma **Senha de App do Google** em `SMTP_PASS`, e não a senha normal da conta.
+
+### ✈️ Telegram
+
+Informe o token do Bot em `TELEGRAM_BOT_TOKEN` e o ID do usuário, grupo ou canal em `TELEGRAM_CHAT_ID`.
+
+### 🔴 Ransomware.Live
+
+Informe sua chave da API em `RANSOMWARE_LIVE_API_KEY`.
+
+### 🟣 Microsoft Teams
+
+Informe a URL do Webhook/fluxo utilizado para receber os alertas em `TEAMS_WEBHOOK_URL`.
+
+> ⚠️ **Nunca publique seu arquivo `.env` no GitHub.** Ele contém senhas, tokens, API Keys e Webhooks privados.
 
 ---
 
-### 4. Inicie a aplicação
+# ▶️ Iniciando a Aplicação
 
-```bash
-npm start
+## 🪟 Windows
+
+Na pasta principal do projeto:
+
+```cmd
+iniciar_tcc.bat
 ```
 
-Depois, acesse:
+## 🐧 Linux / macOS
+
+```bash
+chmod +x iniciar_tcc.sh
+./iniciar_tcc.sh
+```
+
+## ⚙️ Manualmente
+
+Também é possível iniciar diretamente pelo Node.js:
+
+```bash
+cd backend
+node src/server.js
+```
+
+Depois acesse:
 
 ```text
-http://localhost:3000
+http://localhost:3001
 ```
-
----
-
-## 🗄️ Banco de dados
-
-O projeto utiliza **SQLite** como banco de dados local.
-
-O banco é responsável principalmente pelo armazenamento de:
-
-* incidentes coletados;
-* informações normalizadas;
-* identificação da fonte;
-* controle de duplicidade;
-* histórico de alertas enviados.
-
-O arquivo contendo os dados reais do SQLite não deve ser versionado no GitHub.
-
----
-
-## 🧪 Testes
-
-Os testes automatizados verificam funcionalidades críticas da aplicação, como normalização, identificação de ataques brasileiros, deduplicação e endpoints da API.
-
-Para executar:
-
-```bash
-npm test
-```
-
-Para verificar a qualidade do código:
-
-```bash
-npm run lint
-```
-
----
-
-## 🔄 CI/CD
-
-O projeto utiliza **GitHub Actions** para automatizar etapas do processo de integração e entrega.
-
-```text
-Commit / Pull Request
-        │
-        ▼
-     npm ci
-        │
-        ▼
-      ESLint
-        │
-        ▼
-      Tests
-        │
-        ▼
- Security Analysis
-        │
-        ▼
-   Docker Build
-        │
-        ▼
- Container Scan
-        │
-        ▼
-       GHCR
-        │
-        ▼
-      Deploy
-```
-
-As etapas serão adicionadas progressivamente conforme os marcos da disciplina.
 
 ---
 
 ## 🐳 Docker
 
-A aplicação será preparada para execução através de containers.
+Para executar utilizando Docker:
 
 ```bash
-docker build -t ransomware-monitor .
+docker compose up --build
 ```
 
-Execução:
+Acesse:
+
+```text
+http://localhost:3002
+```
+
+Para encerrar:
 
 ```bash
-docker run -p 3000:3000 ransomware-monitor
+docker compose down
 ```
 
-Com Docker Compose:
+---
 
-```bash
-docker compose up -d
+## 📁 Estrutura
+
+```text
+Projeto-CyberThreatHub/
+│
+├── backend/
+│   ├── src/
+│   │   ├── database/
+│   │   ├── services/
+│   │   └── server.js
+│   ├── package.json
+│   └── arquivos de teste
+│
+├── frontend/
+│   ├── css/
+│   ├── js/
+│   └── index.html
+│
+├── Dockerfile
+├── docker-compose.yml
+├── iniciar_tcc.bat
+├── iniciar_tcc.sh
+└── README.md
 ```
 
-O banco SQLite utilizará armazenamento persistente para evitar perda dos dados ao recriar o container.
+---
+
+## 🗃️ Banco de Dados
+
+O projeto utiliza **SQLite** para persistência local.
+
+O banco armazena principalmente:
+
+* 📰 Notícias;
+* 🚨 Ameaças;
+* 🛡️ CVEs;
+* 📊 Métricas.
+
+O arquivo do banco é criado automaticamente pela aplicação.
+
+---
+
+## 🔌 Principais Endpoints
+
+```text
+GET  /api/dashboard
+GET  /api/noticias
+GET  /api/ameacas
+GET  /api/cves
+GET  /api/cves/:id
+GET  /api/settings
+POST /api/settings
+```
+
+---
+
+## 🔄 Atualização Automática
+
+A aplicação realiza automaticamente a atualização das fontes de inteligência.
+
+| Dados            |             Intervalo |
+| ---------------- | --------------------: |
+| Threat Feed      |            30 minutos |
+| Vulnerabilidades |                1 hora |
+| CVEFeed RSS      |                1 hora |
+| Notícias         | Atualização periódica |
 
 ---
 
 ## 🔐 Segurança
 
-Credenciais e tokens utilizados pelas integrações não devem permanecer diretamente no código-fonte.
+As credenciais utilizadas pela aplicação devem permanecer no arquivo `.env`.
 
-São utilizadas variáveis de ambiente e **GitHub Secrets** para informações sensíveis, como:
+Certifique-se de que ele esteja incluído no `.gitignore`:
 
-* tokens;
-* webhooks;
-* senhas;
-* credenciais;
-* configurações privadas.
-
-O pipeline DevSecOps também será preparado para realizar:
-
-* análise estática de segurança;
-* análise das dependências Node.js;
-* análise de vulnerabilidades das imagens Docker.
-
----
-
-## 📊 Observabilidade
-
-A etapa final do projeto utilizará:
-
-**Prometheus** → coleta de métricas.
-
-**Grafana** → visualização e monitoramento.
-
-Entre os indicadores planejados estão:
-
-* tráfego da aplicação;
-* latência;
-* taxa de erros;
-* consumo de recursos;
-* ataques coletados;
-* ataques relacionados ao Brasil;
-* alertas enviados;
-* falhas nas integrações.
-
----
-
-## 📦 Etapas do projeto
-
-### A1 — Integração Contínua
-
-* Repositório Git estruturado
-* Aplicação inicial
-* Interface web
-* SQLite
-* Testes automatizados
-* Pipeline CI
-
-### A2 — IaC e Entrega Contínua
-
-* Dockerfile
-* Docker Compose
-* Pipeline CD
-* Container Registry
-* Secrets Management
-* Semantic Versioning
-* Rollback
-
-### A3 — DevSecOps e Observabilidade
-
-* SAST
-* Análise de dependências
-* Scan de containers
-* Prometheus
-* Grafana
-* Logs e métricas
-* Documentação técnica
-* Live Demo
-
----
-
-## 📈 Fluxo DevOps
-
-```text
-DESENVOLVIMENTO
-      │
-      ▼
-     Git
-      │
-      ▼
-Pull Request
-      │
-      ▼
-      CI
-      │
- ┌────┴────┐
- │         │
-Lint     Tests
- │         │
- └────┬────┘
-      ▼
- DevSecOps
-      │
-      ▼
-Docker Build
-      │
-      ▼
-Container Registry
-      │
-      ▼
-     Deploy
-      │
-      ▼
-  Prometheus
-      │
-      ▼
-    Grafana
+```gitignore
+.env
+*.env
 ```
 
+Para compartilhar a estrutura necessária sem expor credenciais, utilize um `.env.example`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+ALERT_EMAIL_TO=
+
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+RANSOMWARE_LIVE_API_KEY=
+TEAMS_WEBHOOK_URL=
+```
+
+> 🔒 Nunca envie senhas, tokens, API Keys ou Webhooks para o repositório público.
+
 ---
 
-## 🎓 Projeto acadêmico
+## 🎓 Finalidade
 
-Projeto desenvolvido para a disciplina de **Integração DevOps — UniCEUB**, com o objetivo de aplicar na prática conceitos de:
+O **Cyber Threat Hub** foi desenvolvido para fins acadêmicos, educacionais e de pesquisa em **Cyber Threat Intelligence e Segurança da Informação**.
 
-`Git` • `CI/CD` • `Containers` • `DevSecOps` • `Observabilidade` • `Automação`
-
----
-
-## ⚠️ Aviso
-
-Este projeto possui finalidade **acadêmica e educacional**.
-
-As informações apresentadas são provenientes de fontes externas de inteligência sobre ransomware e podem conter dados incompletos, atrasados ou sujeitos a alterações.
+As informações utilizadas são provenientes de APIs e fontes públicas de inteligência e devem ser utilizadas exclusivamente para atividades legítimas de monitoramento, pesquisa e segurança defensiva.
 
 ---
 
-## 📄 Licença
+## 👨‍💻 Autor
 
-Projeto desenvolvido para fins acadêmicos.
+**Arthur Barroso Neiva**
+
+Estudante de **Análise e Desenvolvimento de Sistemas**
+Foco em **Cybersecurity, Cyber Threat Intelligence e Desenvolvimento de Software**
+
+GitHub: **[@ArthurNeiva017](https://github.com/ArthurNeiva017)**
+
+---
+
+<div align="center">
+
+### ☁️ Cyber Threat Hub
+
+**Monitorar • Analisar • Detectar • Alertar**
+
+</div>
