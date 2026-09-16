@@ -1,8 +1,6 @@
 const axios = require("axios");
 const db = require("../database/db");
-const { sendAttackNotification } = require("./emailService");
-const { sendTelegramNotification } = require("./telegramService");
-const { sendTeamsNotification } = require("./teamsService");
+
 
 function formatDate(dateString) {
   if (!dateString) return "Data Desconhecida";
