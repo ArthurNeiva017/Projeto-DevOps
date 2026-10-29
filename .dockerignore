@@ -1,0 +1,28 @@
+# Dependências e artefatos locais
+**/node_modules
+**/coverage
+**/npm-debug.log*
+
+# Segredos - nunca vão para a imagem
+**/.env
+**/.env.*
+!**/.env.example
+
+# Banco local (a imagem usa volume em /app/data)
+**/*.sqlite
+**/*.sqlite3
+
+# Arquivos que não fazem parte do runtime
+.git
+.github
+docs
+nginx
+scripts
+**/tests
+backend/test.js
+backend/test_cve.js
+backend/jest.config.js
+*.md
+docker-compose*.yml
+Dockerfile
+.dockerignore
