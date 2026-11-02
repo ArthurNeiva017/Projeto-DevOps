@@ -20,6 +20,23 @@ app.use(express.json());
 // Serve static files from the new Vanilla JS frontend
 app.use(express.static(path.join(__dirname, '../../frontend')));
 
+// Health check - usado pelo HEALTHCHECK do Docker, docker-compose e pipeline de CD
+app.get('/api/health', (req, res) => {
+    const version = process.env.APP_VERSION || 'dev';
+
+    // Permite simular uma versão defeituosa para demonstrar o rollback
+    if (process.env.SIMULATE_FAILURE === 'true') {
+        return res.status(503).json({ status: 'error', version, reason: 'Falha simulada (SIMULATE_FAILURE=true)' });
+    }
+
+    db.get('SELECT 1 AS ok', [], (err) => {
+        if (err) {
+            return res.status(503).json({ status: 'error', version, reason: 'Banco de dados indisponível' });
+        }
+        res.json({ status: 'ok', version, uptime: Math.round(process.uptime()) });
+    });
+});
+
 // Dashboard Route - Real-time statistics
 let cachedPwnedCount = null;
 let lastPwnedFetch = 0;
@@ -252,8 +269,11 @@ app.get('/api/cves/:id', async (req, res) => {
             return res.json(JSON.parse(cachedData.cvefeed_json));
         }
 
-        // 2. Se não tem no banco, busca na API do CVEFeed
-        const apiKey = process.env.CVEFEED_API_KEY || 'cvefeed_Su0tPaP8_fdf2ce16de0a34c3e73f292264c5b579a5eac7c126bb5fd7c4496359ef5b6764';
+        // 2. Se não tem no banco, busca na API do CVEFeed (chave vem somente do ambiente)
+        const apiKey = process.env.CVEFEED_API_KEY;
+        if (!apiKey) {
+            return res.status(503).json({ error: 'CVEFEED_API_KEY não configurada' });
+        }
         const response = await axios.get(`https://cvefeed.io/api/vulnerability/${cveId}/`, {
             headers: {
                 'Authorization': `Bearer ${apiKey}`,

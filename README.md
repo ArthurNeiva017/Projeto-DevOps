@@ -182,7 +182,7 @@ npm install
 
 # 🔑 Configuração das APIs
 
-Dentro da pasta `backend`, crie um arquivo chamado:
+Na raiz do projeto, copie o modelo `.env.example` para um arquivo chamado:
 
 ```text
 .env
@@ -204,6 +204,9 @@ TELEGRAM_CHAT_ID=seu_chat_id
 
 # Ransomware.Live
 RANSOMWARE_LIVE_API_KEY=sua_api_key
+
+# CVEFeed.io
+CVEFEED_API_KEY=sua_api_key
 
 # Microsoft Teams
 TEAMS_WEBHOOK_URL=sua_url_do_webhook
@@ -283,6 +286,23 @@ Para encerrar:
 docker compose down
 ```
 
+A stack sobe dois serviços: `app` (Node.js + SQLite persistido no volume `db-data`) e `nginx` (reverse proxy, único serviço exposto). As credenciais vêm do arquivo `.env` na raiz (veja `.env.example`). O estado da aplicação pode ser consultado em `GET /api/health`.
+
+---
+
+## 🚀 Entrega Contínua (CD) e Rollback
+
+* Toda tag `vX.Y.Z` (SemVer) dispara build, publicação da imagem no **GitHub Container Registry** (`ghcr.io/arthurneiva017/projeto-devops`), deploy em **homologação**, deploy em **produção** e criação do **GitHub Release**.
+* Segredos ficam nos **GitHub Secrets** dos environments `homologacao` e `producao`. Nenhuma credencial fica no código.
+* Se o health check de uma nova versão falhar, o pipeline executa **rollback automático** para a última versão estável. Também é possível fazer rollback manual para qualquer versão publicada.
+
+```bash
+git tag -a v1.1.0 -m "feat: nova funcionalidade"
+git push origin v1.1.0
+```
+
+📄 Documentação completa, com o roteiro de simulação do rollback: [`docs/CD-ROLLBACK.md`](docs/CD-ROLLBACK.md)
+
 ---
 
 ## 📁 Estrutura
@@ -303,6 +323,15 @@ Projeto-CyberThreatHub/
 │   ├── js/
 │   └── index.html
 │
+├── nginx/
+│   └── nginx.conf
+├── scripts/
+│   ├── deploy.sh
+│   └── rollback.sh
+├── docs/
+│   └── CD-ROLLBACK.md
+├── .github/workflows/ci.yml
+├── .env.example
 ├── Dockerfile
 ├── docker-compose.yml
 ├── iniciar_tcc.bat
@@ -337,6 +366,7 @@ GET  /api/cves
 GET  /api/cves/:id
 GET  /api/settings
 POST /api/settings
+GET  /api/health
 ```
 
 ---

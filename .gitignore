@@ -1,0 +1,23 @@
+# Dependências
+node_modules/
+coverage/
+npm-debug.log*
+
+# Segredos
+.env
+.env.*
+*.env
+!.env.example
+
+# Banco de dados local
+*.sqlite
+*.sqlite3
+
+# Estado dos deploys simulados (scripts/deploy.sh)
+.deploy/
+
+# Sistema / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

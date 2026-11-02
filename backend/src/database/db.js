@@ -1,7 +1,11 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.resolve(__dirname, 'database.sqlite');
+const fs = require('fs');
+
+// DB_PATH permite apontar o banco para um volume (ex: /app/data no container)
+const dbPath = process.env.DB_PATH || path.resolve(__dirname, 'database.sqlite');
+if (dbPath !== ':memory:') fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database', err.message);

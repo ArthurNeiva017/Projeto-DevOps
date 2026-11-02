@@ -75,7 +75,7 @@ jobs:
         run: docker compose config --quiet
 
       - name: Build Docker Image
-        run: docker build --build-arg APP_VERSION=ci-${{ github.sha }} -t cyber-threat-hub:ci .
+        run: docker build --build-arg APP_VERSION=ci --build-arg GIT_SHA=${{ github.sha }} -t cyber-threat-hub:ci .
 
       - name: Smoke test do container
         run: |
@@ -87,9 +87,16 @@ jobs:
           docker logs cth-ci
           exit 1
 
+      - name: Teste de integração com docker compose (app + nginx)
+        run: |
+          chmod +x scripts/*.sh
+          IMAGE_NAME=cyber-threat-hub scripts/deploy.sh ci homologacao
+
       - name: Cleanup
         if: always()
-        run: docker rm -f cth-ci || true
+        run: |
+          docker rm -f cth-ci || true
+          docker compose -p cth-homologacao down -v || true
 
   # ===========================================================================
   # CD - publicação da imagem (somente em tags vX.Y.Z)
@@ -289,6 +296,28 @@ jobs:
       - name: Resumo do deploy
         if: success()
         run: echo "### ✅ $VERSION implantada em $DEPLOY_ENV" >> "$GITHUB_STEP_SUMMARY"
+
+  # ===========================================================================
+  # Release - publica o GitHub Release da versão após produção OK
+  # ===========================================================================
+  release:
+    needs: [build-and-push, deploy-producao]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Criar GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build-and-push.outputs.version }}
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+        run: |
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release v$VERSION já existe."; exit 0
+          fi
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --generate-notes \
+            --title "v$VERSION" \
+            --notes "Imagem: $IMAGE:$VERSION (implantada em homologação e produção)"
 
   # ===========================================================================
   # Rollback manual (Run workflow > operation = rollback)

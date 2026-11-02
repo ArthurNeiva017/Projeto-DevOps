@@ -12,13 +12,13 @@ Este checklist acompanha a implementação dos requisitos de DevOps ao longo das
 - [x] CI executando lint, testes e build automaticamente em push/pull_request.
 
 ## Fase A2 - IaC e Continuous Delivery
-- [ ] `Dockerfile` funcional e otimizado (multi-stage, non-root user).
-- [ ] `.dockerignore` configurado corretamente.
-- [ ] Orquestração local com `docker-compose.yml`.
-- [ ] Entrega Contínua (CD) - Pipeline para build de imagem e publicação no Container Registry.
-- [ ] Gerenciamento de Secrets (Uso de GitHub Secrets e `.env.example`).
-- [ ] Versionamento Semântico (Semantic Versioning) implementado nas tags do Docker.
-- [ ] Estratégia de Rollback documentada e implementada.
+- [x] `Dockerfile` funcional e otimizado (multi-stage, non-root user).
+- [x] `.dockerignore` configurado corretamente.
+- [x] Orquestração local com `docker-compose.yml`.
+- [x] Entrega Contínua (CD) - Pipeline para build de imagem e publicação no Container Registry.
+- [x] Gerenciamento de Secrets (Uso de GitHub Secrets e `.env.example`).
+- [x] Versionamento Semântico (Semantic Versioning) implementado nas tags do Docker.
+- [x] Estratégia de Rollback documentada e implementada (ver `docs/CD-ROLLBACK.md`).
 
 ## Fase A3 - DevSecOps e Observabilidade
 - [ ] Segurança (SAST) - Ferramenta de análise de código e vulnerabilidades rodando na CI (ex: Trivy/CodeQL).

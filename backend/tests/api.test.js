@@ -88,6 +88,26 @@ describe('API Endpoints', () => {
         expect(Array.isArray(res.body.cves)).toBeTruthy();
     });
 
+    it('GET /api/health deve retornar status ok e a versão', async () => {
+        const res = await request(app).get('/api/health');
+
+        expect(res.statusCode).toEqual(200);
+        expect(res.body).toHaveProperty('status', 'ok');
+        expect(res.body).toHaveProperty('version');
+    });
+
+    it('GET /api/health deve retornar 503 quando SIMULATE_FAILURE=true', async () => {
+        process.env.SIMULATE_FAILURE = 'true';
+        try {
+            const res = await request(app).get('/api/health');
+
+            expect(res.statusCode).toEqual(503);
+            expect(res.body).toHaveProperty('status', 'error');
+        } finally {
+            delete process.env.SIMULATE_FAILURE;
+        }
+    });
+
     it('GET /api/rota-inexistente deve retornar 404', async () => {
         const res = await request(app).get('/api/rota-inexistente');
 

@@ -1,0 +1,3 @@
+# Scripts executados no runner Linux precisam de LF
+*.sh text eol=lf
+nginx/*.conf text eol=lf

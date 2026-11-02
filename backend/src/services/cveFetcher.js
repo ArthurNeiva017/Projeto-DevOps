@@ -134,7 +134,8 @@ async function updateCVEsFromRSS() {
                     let cvefeedJsonStr = null;
                     // Auto-fetch precise CVSS inline to prevent missing badges on frontend
                     try {
-                        const apiKey = process.env.CVEFEED_API_KEY || 'cvefeed_Su0tPaP8_fdf2ce16de0a34c3e73f292264c5b579a5eac7c126bb5fd7c4496359ef5b6764';
+                        const apiKey = process.env.CVEFEED_API_KEY;
+                        if (!apiKey) throw new Error('CVEFEED_API_KEY não configurada');
                         const detailsRes = await axios.get(`https://cvefeed.io/api/vulnerability/${cveId}/`, {
                             headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept': 'application/json' },
                             timeout: 10000
