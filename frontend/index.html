@@ -4,8 +4,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080a09">
   <title>Cyber Threat Hub</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -15,29 +20,31 @@
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-header">
-      <i class="fa-solid fa-cloud" style="font-size: 1.5rem; color: var(--accent); margin-right: 12px;"></i>
-      <span>Cyber Threat Hub</span>
+      <div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div>
+      <span class="brand-name">threat_hub<span class="cursor">_</span></span>
     </div>
     <nav class="sidebar-nav">
-      <a class="nav-item active" data-target="view-dashboard">
-        <i class="fa-solid fa-chart-line"></i>
+      <div class="nav-label">Monitor</div>
+      <a class="nav-item active" data-target="view-dashboard" data-path="dashboard">
+        <i class="fa-solid fa-chart-simple"></i>
         <span>Dashboard</span>
       </a>
-      <a class="nav-item" data-target="view-news">
+      <a class="nav-item" data-target="view-news" data-path="news">
         <i class="fa-regular fa-newspaper"></i>
         <span>CyberSec News</span>
       </a>
-      <a class="nav-item" data-target="view-threats">
-        <i class="fa-solid fa-triangle-exclamation"></i>
+      <a class="nav-item" data-target="view-threats" data-path="threats">
+        <i class="fa-solid fa-crosshairs"></i>
         <span>Threat Feed</span>
       </a>
-      <a class="nav-item" data-target="view-cves">
-        <i class="fa-solid fa-shield-virus"></i>
+      <a class="nav-item" data-target="view-cves" data-path="cves">
+        <i class="fa-solid fa-bug"></i>
         <span>Vulnerabilidades</span>
       </a>
     </nav>
     <div class="sidebar-footer">
-      <p>Cyber Threat Hub v1.0.0</p>
+      <span class="sys-status">sys: online</span>
+      <span>v1.0.0</span>
     </div>
   </aside>
 
@@ -45,32 +52,33 @@
   <main class="main-wrapper">
     <!-- Topbar -->
     <header class="topbar">
-      <div class="topbar-title">
+      <div class="topbar-title" id="topbar-title">
+        <span class="prompt">$</span>~/<span class="path">dashboard</span>
       </div>
       <div class="topbar-actions">
         <div class="search-box">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" placeholder="Pesquisar...">
+          <input type="text" placeholder="grep ...">
         </div>
         <div class="live-indicator">
-          <span class="live-dot"></span> AO VIVO
+          <span class="live-dot"></span> LIVE
         </div>
         <div class="notification-dropdown" id="notif-dropdown">
-          <button class="icon-btn" id="bell-btn"><i class="fa-regular fa-bell"></i><span class="badge-dot"
-              id="bell-badge" style="display:none;"></span></button>
+          <button class="icon-btn" id="bell-btn" title="Notificações"><i class="fa-regular fa-bell"></i><span
+              class="badge-dot" id="bell-badge" style="display:none;"></span></button>
           <div class="dropdown-menu" id="notif-menu">
             <div class="dropdown-header">
-              <span>Notificações</span>
+              <span>Alertas</span>
               <button id="clear-notifs" class="clear-btn" title="Limpar todas"><i
                   class="fa-solid fa-trash-can"></i></button>
             </div>
             <div class="dropdown-list" id="notif-list">
-              <p class="text-muted empty-notifs" style="padding:24px;text-align:center;">Nenhuma nova notificação</p>
+              <p class="empty-notifs">Nenhum alerta</p>
             </div>
           </div>
         </div>
-        <button class="icon-btn" data-target="view-settings"><i class="fa-solid fa-gear"></i></button>
-        <button class="icon-btn primary"><i class="fa-regular fa-user"></i></button>
+        <button class="icon-btn" data-target="view-settings" data-path="settings" title="Configurações"><i
+            class="fa-solid fa-sliders"></i></button>
       </div>
     </header>
 
@@ -90,12 +98,12 @@
             <i class="fa-solid fa-triangle-exclamation"></i>
           </div>
           <div class="br-banner-content">
-            <h4 id="br-banner-title" class="br-banner-title">🚨 Alerta Crítico: Nova ameaça detectada no Brasil</h4>
+            <h4 id="br-banner-title" class="br-banner-title">Alerta crítico: nova ameaça detectada no Brasil</h4>
             <p id="br-banner-desc" class="br-banner-desc">Uma nova ameaça está ativa.</p>
-            <a href="#" id="br-banner-link" class="br-banner-link">Saiba mais <i
-                class="fa-solid fa-arrow-up-right-from-square"></i></a>
+            <a href="#" id="br-banner-link" class="br-banner-link">abrir threat feed <i
+                class="fa-solid fa-arrow-right"></i></a>
           </div>
-          <button class="br-banner-close" id="br-banner-close"><i class="fa-solid fa-xmark"></i></button>
+          <button class="br-banner-close" id="br-banner-close" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
         </div>
 
         <!-- Dashboard Cards -->
@@ -103,28 +111,26 @@
           <!-- Injetado via JS -->
         </div>
 
-        <!-- Dashboard Charts Top -->
+        <!-- Dashboard Charts -->
         <div class="grid-charts-top">
           <div class="chart-container">
-            <div class="chart-header">Tendência de Vulnerabilidades Críticas</div>
+            <div class="chart-header"><span>Tendência · vulnerabilidades críticas</span></div>
             <div class="chart-wrapper">
               <canvas id="incidentTimelineChart"></canvas>
             </div>
           </div>
           <div class="chart-container">
-            <div class="chart-header">Distribuição de Severidade</div>
+            <div class="chart-header"><span>Distribuição de severidade</span></div>
             <div class="chart-wrapper">
               <canvas id="attackTypesChart"></canvas>
             </div>
           </div>
         </div>
 
-        <!-- Removido o Bottom Chart, mantido apenas o layout topo -->
-
         <!-- Dashboard Tables -->
         <div class="dashboard-tables-grid">
           <div class="table-container">
-            <div class="chart-header">Ameaças Recentes</div>
+            <div class="chart-header"><span>Ameaças recentes</span></div>
             <table class="data-table" id="recent-threats-table">
               <thead>
                 <tr>
@@ -140,9 +146,8 @@
             </table>
           </div>
 
-          <div class="table-container side-table">
-            <div class="chart-header" style="text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px;">Active
-              Vulnerabilities</div>
+          <div class="table-container">
+            <div class="chart-header"><span>Vulnerabilidades ativas</span></div>
             <div class="vuln-list" id="active-vulns-list">
               <!-- Injetado via JS -->
             </div>
@@ -152,13 +157,14 @@
 
       <!-- View: News -->
       <section id="view-news" class="view">
-        <div>
+        <div class="page-header">
+          <div class="eyebrow">// feed</div>
           <h2>CyberSecurity News</h2>
           <p class="text-muted">Agregador em tempo real de notícias sobre segurança da informação</p>
         </div>
 
         <div class="controls-bar">
-          <input type="text" id="news-search" placeholder="Pesquisar notícias..." class="input-field">
+          <input type="text" id="news-search" placeholder="filtrar notícias..." class="input-field">
         </div>
 
         <div class="grid-news" id="news-container">
@@ -168,13 +174,14 @@
 
       <!-- View: Threats -->
       <section id="view-threats" class="view">
-        <div>
+        <div class="page-header">
+          <div class="eyebrow">// intel</div>
           <h2>Threat Feed</h2>
           <p class="text-muted">Monitoramento de alertas e campanhas maliciosas recentes</p>
         </div>
 
         <div class="controls-bar">
-          <input type="text" id="threats-search" placeholder="Pesquisar por vítima ou grupo..." class="input-field">
+          <input type="text" id="threats-search" placeholder="filtrar por vítima ou grupo..." class="input-field">
         </div>
 
         <div class="data-list" id="threats-container">
@@ -184,13 +191,14 @@
 
       <!-- View: CVEs -->
       <section id="view-cves" class="view">
-        <div>
+        <div class="page-header">
+          <div class="eyebrow">// cve</div>
           <h2>Vulnerabilidades</h2>
           <p class="text-muted">Acompanhamento das vulnerabilidades mais recentes e análises de impacto</p>
         </div>
 
         <div class="controls-bar">
-          <input type="text" id="cves-search" placeholder="Pesquisar CVE ID..." class="input-field">
+          <input type="text" id="cves-search" placeholder="CVE-YYYY-NNNN" class="input-field">
         </div>
 
         <div class="data-list" id="cves-container">
@@ -198,63 +206,64 @@
         </div>
       </section>
 
-    <!-- View: Settings -->
-      <section id="view-settings" class="view" style="position: relative; height: calc(100vh - 100px);">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h2 style="font-size: 2rem; color: var(--text-bright); margin-bottom: 8px;">Configurações</h2>
-            <p class="text-muted" style="font-size: 1rem;">Gerencie os alertas e integrações de notificações do sistema</p>
+      <!-- View: Settings -->
+      <section id="view-settings" class="view">
+        <div class="settings-wrap">
+          <div class="page-header">
+            <div class="eyebrow">// config</div>
+            <h2>Configurações</h2>
+            <p class="text-muted">Gerencie os alertas e integrações de notificações do sistema</p>
           </div>
-          
-          <div class="settings-form" style="width: 100%; max-width: 600px; background-color: var(--card-bg, rgba(30, 33, 36, 0.6)); border: 1px solid var(--border, rgba(255, 255, 255, 0.1)); border-radius: 12px; padding: 40px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); backdrop-filter: blur(10px);">
-          <form id="settingsForm">
-            <div style="margin-bottom: 24px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-bright); font-size: 0.95rem;">E-mails para Alerta <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal;">(separados por vírgula)</span></label>
-              <div style="position: relative;">
-                <i class="fa-regular fa-envelope" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                <input type="text" id="alertEmails" class="input-field" placeholder="ex: admin@empresa.com, seguranca@empresa.com" style="width: 100%; padding-left: 44px; border-radius: 8px; background-color: rgba(0,0,0,0.2);">
+
+          <form id="settingsForm" class="settings-form">
+            <div class="form-group">
+              <label for="alertEmails">E-mails para alerta <small>(separados por vírgula)</small></label>
+              <div class="input-icon">
+                <i class="fa-regular fa-envelope"></i>
+                <input type="text" id="alertEmails" class="input-field"
+                  placeholder="admin@empresa.com, seguranca@empresa.com">
               </div>
             </div>
-            
-            <div style="margin-bottom: 24px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-bright); font-size: 0.95rem;">Webhook do Teams <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal;">(separados por vírgula)</span></label>
-              <div style="position: relative;">
-                <i class="fa-solid fa-users-rectangle" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                <input type="text" id="teamsWebhook" class="input-field" placeholder="https://..." style="width: 100%; padding-left: 44px; border-radius: 8px; background-color: rgba(0,0,0,0.2);">
+
+            <div class="form-group">
+              <label for="teamsWebhook">Webhook do Teams <small>(separados por vírgula)</small></label>
+              <div class="input-icon">
+                <i class="fa-solid fa-link"></i>
+                <input type="text" id="teamsWebhook" class="input-field" placeholder="https://...">
               </div>
             </div>
-            
-            <div style="margin-bottom: 24px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-bright); font-size: 0.95rem;">Token do Bot Telegram <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal;">(separados por vírgula)</span></label>
-              <div style="position: relative;">
-                <i class="fa-brands fa-telegram" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                <input type="text" id="telegramToken" class="input-field" placeholder="0000000000:AA..." style="width: 100%; padding-left: 44px; border-radius: 8px; background-color: rgba(0,0,0,0.2);">
+
+            <div class="form-group">
+              <label for="telegramToken">Token do bot Telegram <small>(separados por vírgula)</small></label>
+              <div class="input-icon">
+                <i class="fa-solid fa-key"></i>
+                <input type="password" id="telegramToken" class="input-field" placeholder="0000000000:AA..."
+                  autocomplete="off">
               </div>
             </div>
-            
-            <div style="margin-bottom: 32px;">
-              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-bright); font-size: 0.95rem;">ID do Chat Telegram <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: normal;">(separados por vírgula)</span></label>
-              <div style="position: relative;">
-                <i class="fa-solid fa-hashtag" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                <input type="text" id="telegramChatId" class="input-field" placeholder="-100..." style="width: 100%; padding-left: 44px; border-radius: 8px; background-color: rgba(0,0,0,0.2);">
+
+            <div class="form-group">
+              <label for="telegramChatId">ID do chat Telegram <small>(separados por vírgula)</small></label>
+              <div class="input-icon">
+                <i class="fa-solid fa-hashtag"></i>
+                <input type="text" id="telegramChatId" class="input-field" placeholder="-100...">
               </div>
             </div>
-            
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <button type="submit" class="btn-primary" style="padding: 12px 28px; font-weight: 600; font-size: 1rem; background: linear-gradient(135deg, var(--accent, #f85149) 0%, #d73a49 100%); border: none; color: #fff; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 15px rgba(248, 81, 73, 0.3); transition: transform 0.2s, box-shadow 0.2s;">
-                <i class="fa-solid fa-floppy-disk" style="margin-right: 8px;"></i> Salvar Configurações
+
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">
+                <i class="fa-solid fa-floppy-disk"></i> Salvar
               </button>
-              <span id="settings-status" style="font-size: 0.95rem; display: none; font-weight: 500;"></span>
+              <span id="settings-status" style="display: none;"></span>
             </div>
           </form>
-        </div>
         </div>
       </section>
 
     </div>
     <!-- Slide-out Reading Panel -->
     <div id="side-panel" class="side-panel">
-      <button class="close-btn" id="close-panel"><i class="fa-solid fa-xmark"></i></button>
+      <button class="close-btn" id="close-panel" title="Fechar"><i class="fa-solid fa-xmark"></i></button>
       <div id="panel-content">
         <!-- Injetado via JS -->
       </div>
@@ -262,7 +271,7 @@
   </main>
 
   <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="/js/app.js"></script>
 </body>
 
