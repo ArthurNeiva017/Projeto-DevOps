@@ -1,3 +1,2 @@
-# Scripts executados no runner Linux precisam de LF
-*.sh text eol=lf
+# Arquivos lidos dentro de containers/runner Linux precisam de LF
 nginx/*.conf text eol=lf

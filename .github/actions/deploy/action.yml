@@ -1,0 +1,73 @@
+name: Deploy simulado
+description: >
+  Sobe uma versão da imagem num ambiente simulado (projeto docker compose isolado)
+  e valida o health check. O resultado fica registrado em .deploy/<ambiente>/.
+
+inputs:
+  version:
+    description: Versão SemVer da imagem (ex. 1.2.0)
+    required: true
+  environment:
+    description: homologacao | producao
+    required: true
+  image:
+    description: Nome da imagem sem a tag
+    required: true
+  simulate-failure:
+    description: "true faz o /api/health responder 503 (versão defeituosa)"
+    default: "false"
+  pull:
+    description: "true baixa a imagem do registry antes do deploy"
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        DEPLOY_ENV: ${{ inputs.environment }}
+        IMAGE_NAME: ${{ inputs.image }}
+        SIMULATE_FAILURE: ${{ inputs.simulate-failure }}
+        PULL: ${{ inputs.pull }}
+      run: |
+        set -euo pipefail
+        VERSION="${VERSION#v}"
+        case "$DEPLOY_ENV" in
+          homologacao) HTTP_PORT=8081 ;;
+          producao)    HTTP_PORT=8080 ;;
+          *) echo "::error::Ambiente inválido: $DEPLOY_ENV"; exit 2 ;;
+        esac
+        export IMAGE_NAME IMAGE_TAG="$VERSION" HTTP_PORT SIMULATE_FAILURE
+
+        STATE_DIR=".deploy/$DEPLOY_ENV"
+        mkdir -p "$STATE_DIR"
+        log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $1 version=$VERSION env=$DEPLOY_ENV" >> "$STATE_DIR/history.log"; }
+        fail() { echo "::error::$1"; log DEPLOY_FAILED; exit 1; }
+
+        # Cada ambiente é um projeto compose isolado (containers, rede e volume próprios)
+        COMPOSE=(docker compose -p "cth-$DEPLOY_ENV")
+        echo "==> Deploy de $IMAGE_NAME:$VERSION em $DEPLOY_ENV (porta $HTTP_PORT)"
+
+        [ "$PULL" = "true" ] && "${COMPOSE[@]}" pull app
+
+        # --wait aguarda os health checks; falha se algum serviço ficar unhealthy
+        if ! "${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 120; then
+          "${COMPOSE[@]}" ps || true
+          "${COMPOSE[@]}" logs --tail 30 app || true
+          fail "Serviços não ficaram saudáveis"
+        fi
+
+        # Verificação externa (através do nginx), conferindo a versão em execução
+        HEALTH=$(curl -fsS --retry 5 --retry-delay 2 --retry-all-errors "http://localhost:$HTTP_PORT/api/health") \
+          || fail "Health check externo falhou"
+        echo "Health: $HEALTH"
+        grep -q "\"version\":\"$VERSION\"" <<< "$HEALTH" || fail "Versão em execução não corresponde a $VERSION"
+
+        # current = última versão saudável; um deploy que falha não altera este arquivo
+        if [ -f "$STATE_DIR/current" ] && [ "$(cat "$STATE_DIR/current")" != "$VERSION" ]; then
+          cp "$STATE_DIR/current" "$STATE_DIR/previous"
+        fi
+        echo "$VERSION" > "$STATE_DIR/current"
+        log DEPLOY_OK
+        echo "==> $VERSION em execução em $DEPLOY_ENV: http://localhost:$HTTP_PORT"

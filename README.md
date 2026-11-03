@@ -325,12 +325,11 @@ Projeto-CyberThreatHub/
 │
 ├── nginx/
 │   └── nginx.conf
-├── scripts/
-│   ├── deploy.sh
-│   └── rollback.sh
+├── .github/
+│   ├── actions/deploy/action.yml
+│   └── workflows/ci.yml
 ├── docs/
 │   └── CD-ROLLBACK.md
-├── .github/workflows/ci.yml
 ├── .env.example
 ├── Dockerfile
 ├── docker-compose.yml

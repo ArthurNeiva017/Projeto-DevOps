@@ -88,9 +88,12 @@ jobs:
           exit 1
 
       - name: Teste de integração com docker compose (app + nginx)
-        run: |
-          chmod +x scripts/*.sh
-          IMAGE_NAME=cyber-threat-hub scripts/deploy.sh ci homologacao
+        uses: ./.github/actions/deploy
+        with:
+          version: ci
+          environment: homologacao
+          image: cyber-threat-hub
+          pull: "false"
 
       - name: Cleanup
         if: always()
@@ -199,42 +202,80 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Simular ambiente com a versão estável atual
+      - name: Identificar versão estável atual
+        id: stable
         run: |
-          chmod +x scripts/*.sh
           PREVIOUS=$(git tag --list 'v*.*.*' --sort=-v:refname | sed 's/^v//' | grep -vx "$VERSION" | head -n1 || true)
           if [ -n "$PREVIOUS" ] && docker manifest inspect "$IMAGE_NAME:$PREVIOUS" > /dev/null 2>&1; then
             echo "Versão estável atual: $PREVIOUS"
-            scripts/deploy.sh "$PREVIOUS" "$DEPLOY_ENV"
+            echo "version=$PREVIOUS" >> "$GITHUB_OUTPUT"
           else
             echo "Sem versão anterior publicada - primeiro deploy do ambiente."
           fi
 
+      # Sobe a versão anterior para simular o ambiente já em execução. Se ela mesma
+      # estiver quebrada, apenas avisa: o deploy da nova versão segue normalmente.
+      - name: Simular ambiente com a versão estável atual
+        if: steps.stable.outputs.version != ''
+        continue-on-error: true
+        uses: ./.github/actions/deploy
+        with:
+          version: ${{ steps.stable.outputs.version }}
+          environment: ${{ env.DEPLOY_ENV }}
+          image: ${{ env.IMAGE_NAME }}
+
       - name: Deploy da nova versão
         id: deploy
-        env:
-          SIMULATE_FAILURE: ${{ inputs.simulate_failure && 'true' || 'false' }}
-        run: scripts/deploy.sh "$VERSION" "$DEPLOY_ENV"
+        uses: ./.github/actions/deploy
+        with:
+          version: ${{ env.VERSION }}
+          environment: ${{ env.DEPLOY_ENV }}
+          image: ${{ env.IMAGE_NAME }}
+          simulate-failure: ${{ inputs.simulate_failure && 'true' || 'false' }}
 
-      - name: Rollback automático
+      # Versão de destino = última que passou no health check (.deploy/<env>/current)
+      - name: Preparar rollback
+        id: rollback-target
         if: failure() && steps.deploy.outcome == 'failure'
         run: |
           echo "::error::Deploy de $VERSION falhou em $DEPLOY_ENV. Executando rollback."
-          scripts/rollback.sh "$DEPLOY_ENV"
-          {
-            echo "### ⏪ Rollback executado em $DEPLOY_ENV"
-            echo '```'
-            cat ".deploy/$DEPLOY_ENV/history.log"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          STATE=".deploy/$DEPLOY_ENV"
+          if [ ! -f "$STATE/current" ]; then
+            echo "::error::Nenhuma versão estável registrada em $DEPLOY_ENV - rollback impossível"
+            exit 1
+          fi
+          TARGET=$(cat "$STATE/current")
+          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ROLLBACK_START version=$TARGET env=$DEPLOY_ENV" >> "$STATE/history.log"
+          echo "version=$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Rollback automático
+        id: rollback
+        if: failure() && steps.rollback-target.outcome == 'success'
+        uses: ./.github/actions/deploy
+        with:
+          version: ${{ steps.rollback-target.outputs.version }}
+          environment: ${{ env.DEPLOY_ENV }}
+          image: ${{ env.IMAGE_NAME }}
 
       - name: Resumo do deploy
-        if: success()
+        if: always()
+        env:
+          ROLLBACK: ${{ steps.rollback.outcome }}
+          TARGET: ${{ steps.rollback-target.outputs.version }}
         run: |
+          LOG=".deploy/$DEPLOY_ENV/history.log"
+          if [ "$ROLLBACK" = "success" ]; then
+            echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ROLLBACK_OK version=$TARGET env=$DEPLOY_ENV" >> "$LOG"
+            TITLE="### ⏪ Deploy de $VERSION falhou - rollback para $TARGET em $DEPLOY_ENV"
+          elif [ "${{ steps.deploy.outcome }}" = "success" ]; then
+            TITLE="### ✅ $VERSION implantada em $DEPLOY_ENV"
+          else
+            TITLE="### ❌ Deploy de $VERSION falhou em $DEPLOY_ENV"
+          fi
           {
-            echo "### ✅ $VERSION implantada em $DEPLOY_ENV"
+            echo "$TITLE"
             echo '```'
-            cat ".deploy/$DEPLOY_ENV/history.log"
+            cat "$LOG" 2>/dev/null || echo "(sem histórico)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -274,28 +315,81 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Simular ambiente com a versão estável atual
+      - name: Identificar versão estável atual
+        id: stable
         run: |
-          chmod +x scripts/*.sh
           PREVIOUS=$(git tag --list 'v*.*.*' --sort=-v:refname | sed 's/^v//' | grep -vx "$VERSION" | head -n1 || true)
           if [ -n "$PREVIOUS" ] && docker manifest inspect "$IMAGE_NAME:$PREVIOUS" > /dev/null 2>&1; then
-            scripts/deploy.sh "$PREVIOUS" "$DEPLOY_ENV"
+            echo "Versão estável atual: $PREVIOUS"
+            echo "version=$PREVIOUS" >> "$GITHUB_OUTPUT"
+          else
+            echo "Sem versão anterior publicada - primeiro deploy do ambiente."
           fi
+
+      # Sobe a versão anterior para simular o ambiente já em execução. Se ela mesma
+      # estiver quebrada, apenas avisa: o deploy da nova versão segue normalmente.
+      - name: Simular ambiente com a versão estável atual
+        if: steps.stable.outputs.version != ''
+        continue-on-error: true
+        uses: ./.github/actions/deploy
+        with:
+          version: ${{ steps.stable.outputs.version }}
+          environment: ${{ env.DEPLOY_ENV }}
+          image: ${{ env.IMAGE_NAME }}
 
       - name: Deploy da nova versão
         id: deploy
-        run: scripts/deploy.sh "$VERSION" "$DEPLOY_ENV"
+        uses: ./.github/actions/deploy
+        with:
+          version: ${{ env.VERSION }}
+          environment: ${{ env.DEPLOY_ENV }}
+          image: ${{ env.IMAGE_NAME }}
 
-      - name: Rollback automático
+      # Versão de destino = última que passou no health check (.deploy/<env>/current)
+      - name: Preparar rollback
+        id: rollback-target
         if: failure() && steps.deploy.outcome == 'failure'
         run: |
           echo "::error::Deploy de $VERSION falhou em $DEPLOY_ENV. Executando rollback."
-          scripts/rollback.sh "$DEPLOY_ENV"
-          cat ".deploy/$DEPLOY_ENV/history.log" >> "$GITHUB_STEP_SUMMARY"
+          STATE=".deploy/$DEPLOY_ENV"
+          if [ ! -f "$STATE/current" ]; then
+            echo "::error::Nenhuma versão estável registrada em $DEPLOY_ENV - rollback impossível"
+            exit 1
+          fi
+          TARGET=$(cat "$STATE/current")
+          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ROLLBACK_START version=$TARGET env=$DEPLOY_ENV" >> "$STATE/history.log"
+          echo "version=$TARGET" >> "$GITHUB_OUTPUT"
+
+      - name: Rollback automático
+        id: rollback
+        if: failure() && steps.rollback-target.outcome == 'success'
+        uses: ./.github/actions/deploy
+        with:
+          version: ${{ steps.rollback-target.outputs.version }}
+          environment: ${{ env.DEPLOY_ENV }}
+          image: ${{ env.IMAGE_NAME }}
 
       - name: Resumo do deploy
-        if: success()
-        run: echo "### ✅ $VERSION implantada em $DEPLOY_ENV" >> "$GITHUB_STEP_SUMMARY"
+        if: always()
+        env:
+          ROLLBACK: ${{ steps.rollback.outcome }}
+          TARGET: ${{ steps.rollback-target.outputs.version }}
+        run: |
+          LOG=".deploy/$DEPLOY_ENV/history.log"
+          if [ "$ROLLBACK" = "success" ]; then
+            echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ROLLBACK_OK version=$TARGET env=$DEPLOY_ENV" >> "$LOG"
+            TITLE="### ⏪ Deploy de $VERSION falhou - rollback para $TARGET em $DEPLOY_ENV"
+          elif [ "${{ steps.deploy.outcome }}" = "success" ]; then
+            TITLE="### ✅ $VERSION implantada em $DEPLOY_ENV"
+          else
+            TITLE="### ❌ Deploy de $VERSION falhou em $DEPLOY_ENV"
+          fi
+          {
+            echo "$TITLE"
+            echo '```'
+            cat "$LOG" 2>/dev/null || echo "(sem histórico)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================================================
   # Release - publica o GitHub Release da versão após produção OK
@@ -362,9 +456,14 @@ jobs:
         run: docker manifest inspect "$IMAGE_NAME:$VERSION" > /dev/null
 
       - name: Executar rollback
+        uses: ./.github/actions/deploy
+        with:
+          version: ${{ env.VERSION }}
+          environment: ${{ env.DEPLOY_ENV }}
+          image: ${{ env.IMAGE_NAME }}
+
+      - name: Resumo do rollback
         run: |
-          chmod +x scripts/*.sh
-          scripts/rollback.sh "$DEPLOY_ENV" "$VERSION"
           {
             echo "### ⏪ Rollback de $DEPLOY_ENV para $VERSION"
             echo "Disparado por: @${{ github.actor }}"

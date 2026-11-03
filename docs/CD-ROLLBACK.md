@@ -36,8 +36,7 @@ flowchart LR
 | [`.dockerignore`](../.dockerignore) | Mantém `.env`, banco local, testes, docs e `.git` fora da imagem |
 | [`docker-compose.yml`](../docker-compose.yml) | Serviço `app` (Node.js + SQLite em volume `db-data`) e `nginx` (reverse proxy, único serviço exposto), rede interna `backend` e health checks |
 | [`nginx/nginx.conf`](../nginx/nginx.conf) | Proxy reverso com headers de segurança e gzip |
-| [`scripts/deploy.sh`](../scripts/deploy.sh) | Deploy de uma versão num ambiente simulado |
-| [`scripts/rollback.sh`](../scripts/rollback.sh) | Rollback de um ambiente para a última versão estável ou para uma versão informada |
+| [`.github/actions/deploy/action.yml`](../.github/actions/deploy/action.yml) | Action local reutilizada pelo pipeline para o deploy (e o rollback) de uma versão num ambiente simulado |
 
 ### Ambientes simulados
 
@@ -48,7 +47,7 @@ Cada ambiente é um **projeto docker compose isolado** no runner do GitHub Actio
 | Homologação | `cth-homologacao` | 8081 | `homologacao` |
 | Produção | `cth-producao` | 8080 | `producao` |
 
-O `deploy.sh` faz `docker compose pull` e `up -d --wait`, que aguarda os health checks. Depois confere, através do nginx, se `/api/health` responde com a **versão esperada**. O estado de cada ambiente fica em `.deploy/<ambiente>/`:
+A action de deploy faz `docker compose pull` e `up -d --wait`, que aguarda os health checks. Depois confere, através do nginx, se `/api/health` responde com a **versão esperada**. O estado de cada ambiente fica em `.deploy/<ambiente>/`:
 
 - `current`: última versão implantada com sucesso (um deploy que falhou **não** altera este arquivo)
 - `previous`: versão estável anterior
@@ -102,7 +101,7 @@ git push origin v1.1.0
 
 ### 5.1 Rollback automático
 
-Quando o deploy da nova versão falha (container *unhealthy*, health check externo falhando ou versão divergente), o step **"Rollback automático"** executa `scripts/rollback.sh <ambiente>`. O script reimplanta a versão registrada em `.deploy/<ambiente>/current`, que é a última que passou no health check. O job termina como **falho**, para deixar o incidente visível, e a promoção para produção é **bloqueada**.
+Quando o deploy da nova versão falha (container *unhealthy*, health check externo falhando ou versão divergente), o step **"Preparar rollback"** lê a versão registrada em `.deploy/<ambiente>/current`, que é a última que passou no health check, e o step **"Rollback automático"** reimplanta essa versão usando a mesma action de deploy. O job termina como **falho**, para deixar o incidente visível, e a promoção para produção é **bloqueada**.
 
 ### 5.2 Rollback manual
 
@@ -121,7 +120,7 @@ A variável `SIMULATE_FAILURE=true` faz o `/api/health` responder `503`, simulan
    - *operation:* `deploy`
    - *simulate_failure:* ✅
 4. Resultado esperado em `deploy-homologacao`:
-   - "Simular ambiente com a versão estável atual" sobe a **1.0.0** (`DEPLOY_OK`)
+   - "Simular ambiente com a versão estável atual" sobe a **1.0.0** (`DEPLOY_OK`). Se a versão anterior estiver quebrada, o step só emite um aviso e o pipeline segue
    - "Deploy da nova versão" sobe a **1.1.0**, o health check retorna 503 e o step falha (`DEPLOY_FAILED`)
    - "Rollback automático" reimplanta a **1.0.0** (`ROLLBACK_START` → `DEPLOY_OK` → `ROLLBACK_OK`)
    - `deploy-producao` **não executa**
@@ -139,16 +138,24 @@ A variável `SIMULATE_FAILURE=true` faz o `/api/health` responder `503`, simulan
 
 ### 5.4 Reproduzindo localmente
 
+O mesmo fluxo pode ser reproduzido só com o docker compose, alterando `IMAGE_TAG`:
+
 ```bash
 docker build --build-arg APP_VERSION=1.0.0 -t cyber-threat-hub:1.0.0 .
 docker build --build-arg APP_VERSION=1.1.0 -t cyber-threat-hub:1.1.0 .
 
-scripts/deploy.sh 1.0.0 homologacao                         # OK -> http://localhost:8081
-SIMULATE_FAILURE=true scripts/deploy.sh 1.1.0 homologacao   # falha
-scripts/rollback.sh homologacao                             # volta para 1.0.0
-cat .deploy/homologacao/history.log
+# versão estável
+IMAGE_TAG=1.0.0 docker compose up -d --no-build --wait
+curl http://localhost:3002/api/health        # {"status":"ok","version":"1.0.0"}
 
-docker compose -p cth-homologacao down -v                   # limpeza
+# versão defeituosa: o --wait falha porque o app fica unhealthy
+IMAGE_TAG=1.1.0 SIMULATE_FAILURE=true docker compose up -d --no-build --wait
+
+# rollback: volta para a imagem estável
+IMAGE_TAG=1.0.0 docker compose up -d --no-build --wait
+curl http://localhost:3002/api/health        # {"status":"ok","version":"1.0.0"}
+
+docker compose down -v                       # limpeza
 ```
 
 ## 6. Evidências
