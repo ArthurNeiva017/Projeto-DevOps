@@ -1,6 +1,30 @@
 const axios = require("axios");
 const db = require("../database/db");
+const { sendAttackNotification } = require("./emailService");
 
+// Carrega um canal de alerta opcional; se o módulo não existir, o canal fica desativado
+function loadOptionalNotifier(modulePath, fnName) {
+  try {
+    return require(modulePath)[fnName];
+  } catch (err) {
+    if (err.code !== "MODULE_NOT_FOUND") throw err;
+    console.warn(`⚠️ ${modulePath} não encontrado - alertas por este canal desativados.`);
+    return async () => false;
+  }
+}
+
+const sendTelegramNotification = loadOptionalNotifier("./telegramService", "sendTelegramNotification");
+const sendTeamsNotification = loadOptionalNotifier("./teamsService", "sendTeamsNotification");
+
+// Envia o alerta por um canal sem deixar uma falha derrubar o processo
+async function safeNotify(channel, sendFn, reportText, threat) {
+  try {
+    return await sendFn(reportText, threat);
+  } catch (err) {
+    console.error(`Erro ao enviar alerta via ${channel}:`, err.message);
+    return false;
+  }
+}
 
 function formatDate(dateString) {
   if (!dateString) return "Data Desconhecida";
@@ -197,12 +221,11 @@ async function processThreatItem(
                   fonte: fonte,
                 };
 
-                const emailSuccess = await sendAttackNotification(
-                  reportText,
-                  threatObj,
-                );
-                await sendTelegramNotification(reportText, threatObj); // Envia para o telegram em paralelo
-                await sendTeamsNotification(reportText, threatObj); // Envia para o teams em paralelo
+                const [emailSuccess] = await Promise.all([
+                  safeNotify("e-mail", sendAttackNotification, reportText, threatObj),
+                  safeNotify("Telegram", sendTelegramNotification, reportText, threatObj),
+                  safeNotify("Teams", sendTeamsNotification, reportText, threatObj),
+                ]);
 
                 if (emailSuccess) {
                   db.run(
