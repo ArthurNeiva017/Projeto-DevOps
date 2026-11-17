@@ -522,10 +522,6 @@ Projeto-DevOps/
 
 O **Cyber Threat Hub** foi desenvolvido para fins acadêmicos, educacionais e de pesquisa em **Cyber Threat Intelligence e Segurança da Informação**. As informações vêm de APIs e fontes públicas e devem ser usadas exclusivamente em atividades legítimas de monitoramento, pesquisa e segurança defensiva.
 
-## 👨‍💻 Autor
-
-**Arthur Barroso Neiva**: Cybersecurity, Cyber Threat Intelligence e Desenvolvimento de Software.
-GitHub: **[@ArthurNeiva017](https://github.com/ArthurNeiva017)**
 
 ---
 
