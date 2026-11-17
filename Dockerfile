@@ -4,7 +4,7 @@
 # Instala apenas as dependências de produção. Ferramentas de build ficam
 # neste estágio caso o sqlite3 precise compilar o binário nativo.
 # Base Debian 13 (trixie): o binário pré-compilado do sqlite3 6 exige glibc >= 2.38.
-FROM node:22-trixie-slim AS deps
+FROM node:25-trixie-slim AS deps
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 make g++ \
@@ -15,7 +15,7 @@ COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # ---------- Estágio 2: runtime ----------
-FROM node:22-trixie-slim AS runtime
+FROM node:25-trixie-slim AS runtime
 
 ARG APP_VERSION=dev
 ARG GIT_SHA=unknown
