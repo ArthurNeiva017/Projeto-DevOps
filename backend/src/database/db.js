@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const logger = require('../observability/logger');
 
 const fs = require('fs');
 
@@ -8,9 +9,9 @@ const dbPath = process.env.DB_PATH || path.resolve(__dirname, 'database.sqlite')
 if (dbPath !== ':memory:') fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
-        console.error('Error opening database', err.message);
+        logger.error('Error opening database', err.message);
     } else {
-        console.log('Connected to the SQLite database.');
+        logger.info('Connected to the SQLite database.');
 
         db.serialize(() => {
             // Create NOTICIA table

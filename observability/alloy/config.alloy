@@ -1,0 +1,74 @@
+// Grafana Alloy - coleta os logs (stdout/stderr) dos containers da stack e envia ao Loki.
+// Só são coletados containers com a label "cth.logs=true" (app e nginx no docker-compose.yml).
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+
+  filter {
+    name   = "label"
+    values = ["cth.logs=true"]
+  }
+}
+
+discovery.relabel "containers" {
+  targets = []
+
+  // service = nome do serviço no compose (app, nginx)
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  // environment = projeto compose (cyber-threat-hub, cth-homologacao, cth-producao)
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "environment"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.process.app.receiver]
+}
+
+// Os logs da aplicação são JSON (backend/src/observability/logger.js):
+// o nível vira label (baixa cardinalidade) para filtrar rápido no Grafana.
+loki.process "app" {
+  stage.match {
+    selector = "{service=\"app\"}"
+
+    stage.json {
+      expressions = {
+        level = "level",
+      }
+    }
+
+    stage.labels {
+      values = {
+        level = "",
+      }
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -1,2 +1,5 @@
 # Arquivos lidos dentro de containers/runner Linux precisam de LF
 nginx/*.conf text eol=lf
+observability/** text eol=lf
+scripts/*.sh text eol=lf
+.github/** text eol=lf

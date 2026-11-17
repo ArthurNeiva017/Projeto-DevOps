@@ -1,0 +1,12 @@
+# Carrega os dashboards versionados em observability/grafana/dashboards
+apiVersion: 1
+
+providers:
+  - name: cyber-threat-hub
+    folder: Cyber Threat Hub
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards

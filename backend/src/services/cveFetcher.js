@@ -1,4 +1,5 @@
 const axios = require('axios');
+const logger = require('../observability/logger');
 const rssParser = require('rss-parser');
 const db = require('../database/db');
 
@@ -6,7 +7,7 @@ const parser = new rssParser();
 
 // Utilizando a API pública do NIST NVD para buscar as últimas CVEs
 async function updateCVEsFromAPI() {
-    console.log('Fetching latest CVEs from NIST NVD API...');
+    logger.info('Fetching latest CVEs from NIST NVD API...');
 
     // A API do NVD 2.0 não ordena por "mais recentes" automaticamente. 
     // É necessário filtrar pela data de publicação para não pegar CVEs velhas!
@@ -79,12 +80,12 @@ async function updateCVEsFromAPI() {
             });
         }
     } catch (error) {
-        console.error('Error fetching CVEs from NIST API:', error.message);
+        logger.error('Error fetching CVEs from NIST API:', error.message);
     }
 }
 
 async function updateCVEsFromRSS() {
-    console.log('Fetching latest CVEs from CVEFeed RSS...');
+    logger.info('Fetching latest CVEs from CVEFeed RSS...');
     const url = 'https://cvefeed.io/rssfeed/latest.xml';
 
     try {
@@ -170,9 +171,9 @@ async function updateCVEsFromRSS() {
         }
     } catch (error) {
         if (error.response && error.response.status === 403) {
-            console.log(`[Aviso] CVEFeed RSS aguardando liberação do Cloudflare (403). Tentaremos novamente mais tarde.`);
+            logger.info(`[Aviso] CVEFeed RSS aguardando liberação do Cloudflare (403). Tentaremos novamente mais tarde.`);
         } else {
-            console.error('Error fetching CVEs from RSS:', error.message);
+            logger.error('Error fetching CVEs from RSS:', error.message);
         }
     }
 }

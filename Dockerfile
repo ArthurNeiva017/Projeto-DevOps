@@ -3,7 +3,8 @@
 # ---------- Estágio 1: dependências ----------
 # Instala apenas as dependências de produção. Ferramentas de build ficam
 # neste estágio caso o sqlite3 precise compilar o binário nativo.
-FROM node:20-bookworm-slim AS deps
+# Base Debian 13 (trixie): o binário pré-compilado do sqlite3 6 exige glibc >= 2.38.
+FROM node:22-trixie-slim AS deps
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 make g++ \
@@ -14,7 +15,7 @@ COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # ---------- Estágio 2: runtime ----------
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-trixie-slim AS runtime
 
 ARG APP_VERSION=dev
 ARG GIT_SHA=unknown
@@ -28,7 +29,19 @@ LABEL org.opencontainers.image.title="cyber-threat-hub" \
 ENV NODE_ENV=production \
     PORT=3001 \
     APP_VERSION=${APP_VERSION} \
+    GIT_SHA=${GIT_SHA} \
     DB_PATH=/app/data/database.sqlite
+
+# Hardening (DevSecOps):
+#  - aplica as correções de segurança disponíveis dos pacotes do sistema operacional;
+#  - remove npm/corepack/yarn: não são usados em runtime e trazem dependências que
+#    só aumentariam a superfície de ataque e os achados do scan de contêiner (Trivy).
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+              /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+              /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
 
 WORKDIR /app
 

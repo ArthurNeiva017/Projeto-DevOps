@@ -18,6 +18,8 @@
 docs
 nginx
 scripts
+observability
+.trivyignore
 **/tests
 backend/test.js
 backend/test_cve.js

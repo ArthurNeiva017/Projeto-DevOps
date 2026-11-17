@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
-require('dotenv').config();
+const logger = require('../observability/logger');
+require('dotenv').config({ quiet: true });
 
 function formatDate(dateString) {
     if (!dateString) return 'Data Desconhecida';
@@ -49,10 +50,10 @@ ${attack.url}`;
             subject: subject,
             text: textBody
         });
-        console.log("Email de alerta enviado com sucesso: %s", info.messageId);
+        logger.info("Email de alerta enviado com sucesso: %s", info.messageId);
         return true;
     } catch (error) {
-        console.error("Erro ao enviar email de notificação:", error);
+        logger.error("Erro ao enviar email de notificação:", error);
         return false;
     }
 }

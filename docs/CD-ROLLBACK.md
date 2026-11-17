@@ -22,7 +22,8 @@ flowchart LR
 | Job | Quando roda | O que faz |
 |---|---|---|
 | `build-and-test` | push/PR na `main`, tags | `npm ci`, testes Jest, `docker compose config`, build da imagem, smoke test do container e teste de integração com a stack completa (app + nginx) via `docker compose` |
-| `build-and-push` | tags `vX.Y.Z` | Valida SemVer, gera as tags da imagem e publica no **GitHub Container Registry** |
+| `security-scan` / `codeql` | push/PR na `main`, tags | DevSecOps (Fase A3): npm audit, Semgrep, Trivy e CodeQL. Detalhes no [README](../README.md#-segurança-devsecops) |
+| `build-and-push` | tags `vX.Y.Z` | Valida SemVer, gera as tags da imagem, publica no **GitHub Container Registry** e gera o SBOM. Só roda se CI e DevSecOps estiverem verdes |
 | `deploy-homologacao` | após o push | Sobe a versão estável anterior (simula o ambiente existente), faz deploy da nova versão e executa **rollback automático** se o health check falhar |
 | `deploy-producao` | após homologação OK | Igual à homologação, na porta 8080. Pode exigir aprovação manual (*Required reviewers* no environment) |
 | `release` | após produção OK | Cria o **GitHub Release** `vX.Y.Z` com notas geradas a partir dos commits |
@@ -39,6 +40,8 @@ flowchart LR
 | [`.github/actions/deploy/action.yml`](../.github/actions/deploy/action.yml) | Action local reutilizada pelo pipeline para o deploy (e o rollback) de uma versão num ambiente simulado |
 
 ### Ambientes simulados
+
+> Fase A3: com `DEPLOY_OBSERVABILITY=true` (padrão), cada deploy também sobe Prometheus, Loki, Alloy e Grafana (Grafana em `:3011` na homologação e `:3000` na produção) e valida métricas e logs. Uma falha da observabilidade gera só um aviso e **não** dispara rollback.
 
 Cada ambiente é um **projeto docker compose isolado** no runner do GitHub Actions, com containers, rede e volume próprios:
 

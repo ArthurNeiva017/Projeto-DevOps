@@ -1,0 +1,54 @@
+# Regras de alerta (visíveis em http://localhost:9090/alerts e no dashboard do Grafana).
+# Os limites refletem os SLOs definidos no README (seção Observabilidade).
+groups:
+  - name: cyber-threat-hub
+    rules:
+      - alert: AplicacaoIndisponivel
+        expr: up{job="cyber-threat-hub"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cyber Threat Hub fora do ar"
+          description: "O Prometheus não consegue coletar métricas de {{ $labels.instance }} há mais de 1 minuto."
+
+      - alert: TaxaDeErrosAlta
+        expr: |
+          sum(rate(http_requests_total{job="cyber-threat-hub", status_code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(http_requests_total{job="cyber-threat-hub"}[5m])), 1e-9) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Mais de 5% das requisições estão falhando (5xx)"
+          description: "Taxa de erros atual: {{ $value | humanizePercentage }}."
+
+      - alert: LatenciaAltaP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="cyber-threat-hub", route!~"/metrics|/api/health"}[5m]))
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latência p95 acima de 1s"
+          description: "p95 atual: {{ $value | humanizeDuration }}."
+
+      - alert: ConsumoDeMemoriaAlto
+        expr: process_resident_memory_bytes{job="cyber-threat-hub"} > 512 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aplicação usando mais de 512 MiB de memória"
+          description: "RSS atual: {{ $value | humanize1024 }}B."
+
+      - alert: ColetaDeFonteFalhando
+        expr: increase(cth_feed_sync_duration_seconds_count{status="error"}[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Coleta da fonte {{ $labels.source }} falhou na última hora"
+          description: "Verifique os logs no Grafana (Explore > Loki) filtrando por source=\"{{ $labels.source }}\"."

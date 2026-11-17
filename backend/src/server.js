@@ -3,19 +3,32 @@ const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') }); // Added to make sure we find it if running from diff directory, or just simple
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env'), quiet: true }); // Added to make sure we find it if running from diff directory, or just simple
+require('dotenv').config({ path: path.join(__dirname, '../.env'), quiet: true });
 
 const db = require('./database/db');
 const { updateNewsFromRSS } = require('./services/rssFetcher');
 const { updateThreatsFromAPI } = require('./services/threatFetcher');
 const { updateCVEsFromAPI, updateCVEsFromRSS } = require('./services/cveFetcher');
+const logger = require('./observability/logger');
+const { httpMiddleware, metricsHandler, trackJob } = require('./observability/metrics');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const CVE_ID_PATTERN = /^CVE-\d{4}-\d{4,7}$/i;
+
+// Não divulga a tecnologia do servidor (header X-Powered-By: Express)
+app.disable('x-powered-by');
+
+// Métricas + log de acesso de todas as requisições (inclusive arquivos estáticos)
+app.use(httpMiddleware);
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+
+// Métricas no formato Prometheus. O nginx bloqueia esta rota para acesso externo;
+// o Prometheus coleta direto do container pela rede interna do docker compose.
+app.get('/metrics', metricsHandler);
 
 // Serve static files from the new Vanilla JS frontend
 app.use(express.static(path.join(__dirname, '../../frontend')));
@@ -99,7 +112,7 @@ app.get('/api/dashboard', async (req, res) => {
                     lastPwnedFetch = now;
                 }
             } catch (hibpErr) {
-                console.error("HIBP fetch error:", hibpErr.message);
+                logger.error("HIBP fetch error:", hibpErr.message);
                 if (!cachedPwnedCount) cachedPwnedCount = 13800000000; // fallback realistic number
             }
         }
@@ -113,7 +126,7 @@ app.get('/api/dashboard', async (req, res) => {
                     lastGangsFetch = now;
                 }
             } catch (err) {
-                console.error("RansomFeed stats fetch error:", err.message);
+                logger.error("RansomFeed stats fetch error:", err.message);
                 if (!cachedActiveGangs) cachedActiveGangs = 68; // fallback
             }
         }
@@ -176,7 +189,7 @@ app.get('/api/dashboard', async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Dashboard error:", error);
+        logger.error("Dashboard error:", error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -246,7 +259,7 @@ app.get('/api/cves', async (req, res) => {
 
         res.json({ cves: mergedList });
     } catch (err) {
-        console.error("Erro na API de cves:", err);
+        logger.error("Erro na API de cves:", err);
         return res.status(500).json({ error: err.message });
     }
 });
@@ -254,7 +267,12 @@ app.get('/api/cves', async (req, res) => {
 // Detalhe de uma CVE (usado pelo painel)
 app.get('/api/cves/:id', async (req, res) => {
     try {
-        const cveId = req.params.id;
+        const cveId = String(req.params.id).toUpperCase();
+
+        // Valida o identificador antes de usá-lo em consulta e na URL da API externa
+        if (!CVE_ID_PATTERN.test(cveId)) {
+            return res.status(400).json({ error: 'Identificador de CVE inválido (formato esperado: CVE-AAAA-NNNN)' });
+        }
 
         // 1. Tentar buscar no banco de dados local primeiro (cache)
         const cachedData = await new Promise((resolve, reject) => {
@@ -298,7 +316,7 @@ app.get('/api/cves/:id', async (req, res) => {
                 }
 
                 db.run(queryStr, queryParams, (err) => {
-                    if (err) console.error("Erro ao salvar cache cvefeed_json no banco:", err.message);
+                    if (err) logger.error("Erro ao salvar cache cvefeed_json no banco:", err.message);
                 });
             } else if (response.data.cvss_score) {
                 // Ao menos salva o CVSS provisório no banco se ainda não tiver o cache completo
@@ -313,7 +331,7 @@ app.get('/api/cves/:id', async (req, res) => {
             // Silencia o log de 'Too Many Requests' para não poluir o terminal
             return res.status(429).json({ error: 'Limite de requisições excedido na API externa' });
         }
-        console.error(`Erro ao buscar detalhes da CVE ${req.params.id}:`, err.message);
+        logger.error({ cve_id: req.params.id }, "Erro ao buscar detalhes da CVE", err);
         res.status(500).json({ error: 'Erro ao buscar detalhes da CVE' });
     }
 });
@@ -367,30 +385,43 @@ app.post('/api/settings', (req, res) => {
         fs.writeFileSync(envPath, envContent, 'utf8');
         res.json({ success: true, message: 'Configurações salvas com sucesso' });
     } catch (err) {
-        console.error('Error saving settings to .env', err);
+        logger.error('Error saving settings to .env', err);
         res.status(500).json({ error: 'Erro ao salvar configurações' });
     }
 });
 
+// Erros não tratados nas rotas: registra no log estruturado sem expor detalhes ao cliente
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+    logger.error({ method: req.method, path: req.path }, 'Erro não tratado na requisição', err);
+    res.status(err.status || 500).json({ error: 'Erro interno do servidor' });
+});
+
+// Coletas das fontes de inteligência, instrumentadas (duração e resultado viram métricas)
+const jobs = {
+    rss_noticias: trackJob('rss_noticias', updateNewsFromRSS),
+    ameacas: trackJob('ameacas', updateThreatsFromAPI),
+    cves_nvd: trackJob('cves_nvd', updateCVEsFromAPI),
+    cves_rss: trackJob('cves_rss', updateCVEsFromRSS)
+};
+
 if (require.main === module) {
     app.listen(PORT, async () => {
-        console.log(`Server running on port ${PORT}`);
+        logger.info({ port: Number(PORT) }, `Server running on port ${PORT}`);
 
         // Trigger all initial fetches in parallel so one slow source doesn't block others
-        await Promise.allSettled([
-            updateNewsFromRSS(),
-            updateThreatsFromAPI(),
-            updateCVEsFromAPI(),
-            updateCVEsFromRSS()
-        ]);
-        console.log('✅ All initial data fetches completed.');
+        await Promise.allSettled(Object.values(jobs).map((job) => job()));
+        logger.info('✅ All initial data fetches completed.');
 
         // Set up intervals to fetch periodically
-        setInterval(updateNewsFromRSS, 120 * 120 * 1000); // 2 hours
-        setInterval(updateThreatsFromAPI, 30 * 60 * 1000); // 30 minutes
-        setInterval(updateCVEsFromAPI, 60 * 60 * 1000); // 1 hour
-        setInterval(updateCVEsFromRSS, 60 * 60 * 1000); // 1 hour
+        setInterval(jobs.rss_noticias, 2 * 60 * 60 * 1000); // 2 hours
+        setInterval(jobs.ameacas, 30 * 60 * 1000); // 30 minutes
+        setInterval(jobs.cves_nvd, 60 * 60 * 1000); // 1 hour
+        setInterval(jobs.cves_rss, 60 * 60 * 1000); // 1 hour
     });
+
+    // Falhas fora do ciclo de requisição também vão para o log estruturado
+    process.on('unhandledRejection', (reason) => logger.error('unhandledRejection', reason));
 }
 
 module.exports = app;
