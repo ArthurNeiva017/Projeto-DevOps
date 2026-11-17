@@ -2,6 +2,7 @@ name: Deploy simulado
 description: >
   Sobe uma versão da imagem num ambiente simulado (projeto docker compose isolado)
   e valida o health check. O resultado fica registrado em .deploy/<ambiente>/.
+  Opcionalmente sobe a stack de observabilidade (Prometheus, Loki, Alloy, Grafana).
 
 inputs:
   version:
@@ -19,6 +20,9 @@ inputs:
   pull:
     description: "true baixa a imagem do registry antes do deploy"
     default: "true"
+  observability:
+    description: "true sobe também o profile observability e verifica métricas/logs (não bloqueia o deploy)"
+    default: "false"
 
 runs:
   using: composite
@@ -30,15 +34,18 @@ runs:
         IMAGE_NAME: ${{ inputs.image }}
         SIMULATE_FAILURE: ${{ inputs.simulate-failure }}
         PULL: ${{ inputs.pull }}
+        OBSERVABILITY: ${{ inputs.observability }}
+        GIT_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
         VERSION="${VERSION#v}"
+        # Portas por ambiente: permite homologação e produção na mesma máquina (runner self-hosted)
         case "$DEPLOY_ENV" in
-          homologacao) HTTP_PORT=8081 ;;
-          producao)    HTTP_PORT=8080 ;;
+          homologacao) HTTP_PORT=8081; GRAFANA_PORT=3011; PROMETHEUS_PORT=9091 ;;
+          producao)    HTTP_PORT=8080; GRAFANA_PORT=3000; PROMETHEUS_PORT=9090 ;;
           *) echo "::error::Ambiente inválido: $DEPLOY_ENV"; exit 2 ;;
         esac
-        export IMAGE_NAME IMAGE_TAG="$VERSION" HTTP_PORT SIMULATE_FAILURE
+        export IMAGE_NAME IMAGE_TAG="$VERSION" HTTP_PORT SIMULATE_FAILURE GRAFANA_PORT PROMETHEUS_PORT GIT_SHA
 
         STATE_DIR=".deploy/$DEPLOY_ENV"
         mkdir -p "$STATE_DIR"
@@ -47,7 +54,8 @@ runs:
 
         # Cada ambiente é um projeto compose isolado (containers, rede e volume próprios)
         COMPOSE=(docker compose -p "cth-$DEPLOY_ENV")
-        echo "==> Deploy de $IMAGE_NAME:$VERSION em $DEPLOY_ENV (porta $HTTP_PORT)"
+        [ "$OBSERVABILITY" = "true" ] && COMPOSE+=(--profile observability)
+        echo "==> Deploy de $IMAGE_NAME:$VERSION em $DEPLOY_ENV (porta $HTTP_PORT, observabilidade: $OBSERVABILITY)"
 
         [ "$PULL" = "true" ] && "${COMPOSE[@]}" pull app
 
@@ -71,3 +79,13 @@ runs:
         echo "$VERSION" > "$STATE_DIR/current"
         log DEPLOY_OK
         echo "==> $VERSION em execução em $DEPLOY_ENV: http://localhost:$HTTP_PORT"
+
+        # Observabilidade: gera um pouco de tráfego e confere métricas, logs e dashboard.
+        # Uma falha aqui só gera aviso - não deve disparar rollback da aplicação.
+        if [ "$OBSERVABILITY" = "true" ]; then
+          node "$GITHUB_WORKSPACE/scripts/gerar-trafego.js" --url "http://localhost:$HTTP_PORT" --duracao 20 --rps 5 --erros 0.1 || true
+          PROMETHEUS_URL="http://localhost:$PROMETHEUS_PORT" GRAFANA_URL="http://localhost:$GRAFANA_PORT" \
+            bash "$GITHUB_WORKSPACE/scripts/verificar-observabilidade.sh" "cth-$DEPLOY_ENV" \
+            || echo "::warning::Stack de observabilidade com problemas em $DEPLOY_ENV (deploy da aplicação OK)"
+          echo "==> Grafana: http://localhost:$GRAFANA_PORT  |  Prometheus: http://localhost:$PROMETHEUS_PORT"
+        fi

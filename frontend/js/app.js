@@ -102,6 +102,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const emptyState = (msg) => `<p class="empty-state">${msg}</p>`;
 
+    // ---- Segurança (XSS) ----
+    // Dados de notícias, ameaças e CVEs vêm de fontes externas (RSS, APIs) e são
+    // inseridos via innerHTML: sempre escapar antes de montar o HTML.
+    const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+    // Só aceita links http(s): bloqueia javascript:, data: e afins em href
+    const safeUrl = (value) => {
+        try {
+            const url = new URL(String(value), window.location.origin);
+            return ['http:', 'https:'].includes(url.protocol) ? esc(url.href) : '#';
+        } catch {
+            return '#';
+        }
+    };
+    // Converte HTML em texto sem executá-lo (DOMParser não roda scripts nem handlers)
+    const htmlToText = (html) => new DOMParser().parseFromString(String(html), 'text/html').body.textContent || '';
+
     // Initial check
     setTimeout(() => {
         updateNotifsUI();
@@ -185,9 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="notif-item">
                 <div class="notif-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
                 <div class="notif-content">
-                    <h5>${n.title}</h5>
-                    <p>${n.desc}</p>
-                    <span class="notif-time">${n.dateStr}</span>
+                    <h5>${esc(n.title)}</h5>
+                    <p>${esc(n.desc)}</p>
+                    <span class="notif-time">${esc(n.dateStr)}</span>
                 </div>
             </div>
         `).join('');
@@ -385,10 +402,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return `
                 <tr>
-                    <td>${t.grupo || t.vitima || 'LockBit 3.0'}</td>
-                    <td>${t.vitima || t.pais || 'Healthcare Corp'}</td>
+                    <td>${esc(t.grupo || t.vitima || 'LockBit 3.0')}</td>
+                    <td>${esc(t.vitima || t.pais || 'Healthcare Corp')}</td>
                     <td><span class="badge ${sev.cls}">${sev.label}</span></td>
-                    <td class="mono">${dataStr}</td>
+                    <td class="mono">${esc(dataStr)}</td>
                 </tr>
             `;
         }).join('') || `<tr><td colspan="4" class="mono">sem dados</td></tr>`;
@@ -398,7 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const incidentHits = Math.floor(Math.random() * 100) + 120 + (10 - i) * 10;
             return `
                 <div class="vuln-item">
-                    <div class="vuln-item-id">${v.cve_id}</div>
+                    <div class="vuln-item-id">${esc(v.cve_id)}</div>
                     <div class="vuln-item-score">${incidentHits} hits</div>
                 </div>
             `;
@@ -423,11 +440,11 @@ document.addEventListener('DOMContentLoaded', () => {
             newsContainer.innerHTML = data.noticias.map((item, index) => `
                 <article class="list-item" data-index="${index}">
                     <div class="item-meta">
-                        <span class="source">${item.fonte || 'CyberSecurity Daily'}</span>
+                        <span class="source">${esc(item.fonte || 'CyberSecurity Daily')}</span>
                         <span>${formatDate(item.data_publicacao)}</span>
                     </div>
-                    <h3>${item.titulo}</h3>
-                    <p class="item-desc">${item.resumo ? item.resumo.substring(0, 150) + '…' : 'Sem resumo disponível.'}</p>
+                    <h3>${esc(item.titulo)}</h3>
+                    <p class="item-desc">${item.resumo ? esc(item.resumo.substring(0, 150)) + '…' : 'Sem resumo disponível.'}</p>
                     <div class="read-more">ler mais <i class="fa-solid fa-arrow-right"></i></div>
                 </article>
             `).join('');
@@ -438,20 +455,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     panelContent.innerHTML = `
                         <div class="item-header">
-                            <span class="badge"><i class="fa-solid fa-rss"></i> ${news.fonte || 'Notícias'}</span>
+                            <span class="badge"><i class="fa-solid fa-rss"></i> ${esc(news.fonte || 'Notícias')}</span>
                             <span class="item-date">${formatDate(news.data_publicacao)}</span>
                         </div>
-                        <h2 class="panel-title">${news.titulo}</h2>
+                        <h2 class="panel-title">${esc(news.titulo)}</h2>
 
                         <div class="panel-block">
                             <h4>// resumo</h4>
-                            <p>${news.resumo || 'Resumo indisponível para este artigo.'}</p>
+                            <p>${esc(news.resumo || 'Resumo indisponível para este artigo.')}</p>
                         </div>
 
                         <div class="panel-source">
                             <h3>Artigo completo</h3>
                             <p class="text-muted">Acesse a fonte original para ler a notícia completa diretamente do publicador.</p>
-                            <a href="${news.url}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">
+                            <a href="${safeUrl(news.url)}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">
                                 abrir fonte original <i class="fa-solid fa-arrow-up-right-from-square"></i>
                             </a>
                         </div>
@@ -489,18 +506,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     <article class="list-item ${br ? 'is-br' : ''}" data-index="${index}">
                         <div class="item-header">
                             <h3 class="threat-title">
-                                ${item.grupo || item.vitima || 'Ameaça registrada'}
+                                ${esc(item.grupo || item.vitima || 'Ameaça registrada')}
                                 ${br ? '<span class="br-flag" title="Ameaça direcionada ao Brasil">BR</span>' : ''}
                             </h3>
                             <span class="item-date">${formatDate(item.data_incidente)}</span>
                         </div>
                         <dl class="threat-fields">
-                            <dt>Vítima</dt><dd>${item.vitima || 'Desconhecida'}</dd>
-                            <dt>País</dt><dd class="br-country">${item.pais || 'Desconhecido'}</dd>
+                            <dt>Vítima</dt><dd>${esc(item.vitima || 'Desconhecida')}</dd>
+                            <dt>País</dt><dd class="br-country">${esc(item.pais || 'Desconhecido')}</dd>
                         </dl>
                         <div class="item-footer">
                             <span class="badge critical"><i class="fa-solid fa-lock"></i> ransomware</span>
-                            <span class="badge">${item.fonte || 'ameaça'}</span>
+                            <span class="badge">${esc(item.fonte || 'ameaça')}</span>
                         </div>
                     </article>
                 `;
@@ -512,15 +529,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const threatUrl = threat.url;
 
                     const analysis = threat.reportText
-                        ? `<p style="white-space: pre-line;">${threat.reportText}</p>`
-                        : `<p>Foi identificado um novo ataque de ransomware contra <strong>${threat.vitima || 'vítima desconhecida'}</strong>.</p>`;
+                        ? `<p style="white-space: pre-line;">${esc(threat.reportText)}</p>`
+                        : `<p>Foi identificado um novo ataque de ransomware contra <strong>${esc(threat.vitima || 'vítima desconhecida')}</strong>.</p>`;
 
                     panelContent.innerHTML = `
                         <div class="item-header">
                             <span class="badge critical"><i class="fa-solid fa-lock"></i> ransomware</span>
                             <span class="item-date">${formatDate(threat.data_incidente)}</span>
                         </div>
-                        <h2 class="panel-title mono">${(threat.grupo || threat.vitima || 'Ameaça').toUpperCase()}</h2>
+                        <h2 class="panel-title mono">${esc((threat.grupo || threat.vitima || 'Ameaça').toUpperCase())}</h2>
 
                         <div class="panel-block">
                             <h4>// análise</h4>
@@ -530,10 +547,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="panel-block">
                             <h4>// detalhes técnicos</h4>
                             <dl class="kv">
-                                <dt>Grupo</dt><dd class="mono">${(threat.grupo || 'Desconhecido').toUpperCase()}</dd>
-                                <dt>Vítima</dt><dd>${threat.vitima || 'Desconhecida'}</dd>
+                                <dt>Grupo</dt><dd class="mono">${esc((threat.grupo || 'Desconhecido').toUpperCase())}</dd>
+                                <dt>Vítima</dt><dd>${esc(threat.vitima || 'Desconhecida')}</dd>
                                 <dt>Data</dt><dd class="mono">${formatDate(threat.data_incidente)}</dd>
-                                <dt>País</dt><dd>${threat.pais || 'Desconhecido'}</dd>
+                                <dt>País</dt><dd>${esc(threat.pais || 'Desconhecido')}</dd>
                             </dl>
                         </div>
 
@@ -541,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <h3>Relatório da fonte</h3>
                             <p class="text-muted">Acesse a fonte original da API que reportou este evento.</p>
                             ${threatUrl ? `
-                            <a href="${threatUrl}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">
+                            <a href="${safeUrl(threatUrl)}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">
                                 ver origem <i class="fa-solid fa-arrow-up-right-from-square"></i>
                             </a>` : '<p class="text-muted"><em>URL não fornecida pela fonte no momento.</em></p>'}
                         </div>
@@ -574,13 +591,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const sevBadge = (score, severity) => {
                 const sev = severityFromScore(score, severity);
                 const label = severity && severity.toUpperCase() !== 'UNKNOWN' ? severity.toUpperCase() : sev.label;
-                return `<span class="sev-badge ${sev.cls}"><i class="fa-solid ${sev.icon}"></i> ${label} · ${score || 'N/A'}</span>`;
+                return `<span class="sev-badge ${sev.cls}"><i class="fa-solid ${sev.icon}"></i> ${esc(label)} · ${esc(score || 'N/A')}</span>`;
             };
 
             cvesContainer.innerHTML = data.cves.map((item, index) => `
                 <article class="list-item cve-row" data-index="${index}">
                     <div class="cve-row-main">
-                        <h3>${item.id}</h3>
+                        <h3>${esc(item.id)}</h3>
                         <span class="cve-badge-slot">${sevBadge(item.cvss, item.severity)}</span>
                     </div>
                     <span class="item-date">${formatDate(item.publishedAt)}</span>
@@ -595,7 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     sidePanel.classList.add('open');
 
                     try {
-                        const res = await fetch(`/api/cves/${baseCve.id}`);
+                        const res = await fetch(`/api/cves/${encodeURIComponent(baseCve.id)}`);
                         const detailData = await res.json();
 
                         const id = detailData.id || baseCve.id;
@@ -604,10 +621,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             : (baseCve.title && baseCve.title !== id ? baseCve.title : 'Título não fornecido na origem');
 
                         let description = detailData.description || baseCve.description || 'Descrição não disponível.';
-                        if (description.includes('<div')) {
-                            const tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = description;
-                            description = tempDiv.textContent || tempDiv.innerText || description;
+                        if (description.includes('<')) {
+                            description = htmlToText(description) || description;
                         }
 
                         const cvssScore = detailData.cvss_score || baseCve.cvss || 'N/A';
@@ -615,11 +630,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         let actions = 'Consultar o fabricante para mitigações.';
                         if (detailData.solution && Array.isArray(detailData.solution.actions) && detailData.solution.actions.length > 0) {
-                            actions = '<ul>' + detailData.solution.actions.map(a => `<li>${a}</li>`).join('') + '</ul>';
+                            actions = '<ul>' + detailData.solution.actions.map(a => `<li>${esc(a)}</li>`).join('') + '</ul>';
                         } else if (detailData.cisa_kev_detail && detailData.cisa_kev_detail.length > 0) {
-                            actions = detailData.cisa_kev_detail[0].required_action || actions;
+                            actions = esc(detailData.cisa_kev_detail[0].required_action) || actions;
                         } else if (baseCve.recommendation) {
-                            actions = baseCve.recommendation;
+                            actions = esc(baseCve.recommendation);
                         }
 
                         const sev = severityFromScore(cvssScore, severityStr);
@@ -629,18 +644,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         panelContent.innerHTML = `
                             <div class="item-header">
-                                <span class="sev-badge ${sev.cls}"><i class="fa-solid ${sev.icon}"></i> ${sevLabel}</span>
+                                <span class="sev-badge ${sev.cls}"><i class="fa-solid ${sev.icon}"></i> ${esc(sevLabel)}</span>
                                 <span class="item-date">${formatDate(pubDate)}</span>
                             </div>
-                            <h2 class="panel-title mono">${id}</h2>
+                            <h2 class="panel-title mono">${esc(id)}</h2>
 
                             <div class="panel-block">
                                 <h4>// detalhes</h4>
                                 <dl class="kv">
-                                    <dt>Título</dt><dd>${title}</dd>
-                                    <dt>CVSS</dt><dd class="mono" style="color: var(--${sev.cls === 'neutral' ? 'text' : sev.cls}); font-weight: 600;">${cvssScore}</dd>
-                                    <dt>Severidade</dt><dd><span class="sev-badge ${sev.cls}">${sevLabel}</span></dd>
-                                    <dt class="stack">Descrição</dt><dd class="stack">${description}</dd>
+                                    <dt>Título</dt><dd>${esc(title)}</dd>
+                                    <dt>CVSS</dt><dd class="mono" style="color: var(--${sev.cls === 'neutral' ? 'text' : sev.cls}); font-weight: 600;">${esc(cvssScore)}</dd>
+                                    <dt>Severidade</dt><dd><span class="sev-badge ${sev.cls}">${esc(sevLabel)}</span></dd>
+                                    <dt class="stack">Descrição</dt><dd class="stack">${esc(description)}</dd>
                                 </dl>
                             </div>
 
@@ -652,7 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="panel-source">
                                 <h3>Fonte original</h3>
                                 <p class="text-muted">Verifique patches e mitigações na NVD ou fonte associada.</p>
-                                <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">
+                                <a href="${safeUrl(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">
                                     ver detalhes originais <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                 </a>
                             </div>

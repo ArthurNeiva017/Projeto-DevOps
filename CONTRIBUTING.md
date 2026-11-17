@@ -15,7 +15,8 @@ Nós utilizamos **Trunk-Based Development**. Isso significa que:
 A branch `main` possui regras estritas configuradas no repositório:
 - **Push direto é bloqueado**: Você não pode fazer `git push origin main`.
 - **Pull Request obrigatório**: Toda alteração precisa ser revisada.
-- **CI/CD aprovado**: O merge só é liberado se a pipeline de Integração Contínua (Testes, Lint e Build) passar com sucesso.
+- **CI/CD aprovado**: O merge só é liberado se os checks obrigatórios passarem: `Build, testes e integração`, `DevSecOps (SAST + SCA + segredos + IaC)` e `SAST (CodeQL - javascript-typescript)`.
+- **Code scanning**: novos alertas de segurança de severidade alta/crítica (aba *Security*) bloqueiam o merge (regra *Code scanning results* do ruleset da `main`).
 
 ## Padrão de Commits (Conventional Commits)
 

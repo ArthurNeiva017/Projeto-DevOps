@@ -1,4 +1,6 @@
 const axios = require("axios");
+const logger = require("../observability/logger");
+const { recordAlert } = require("../observability/metrics");
 const db = require("../database/db");
 const { sendAttackNotification } = require("./emailService");
 
@@ -8,7 +10,7 @@ function loadOptionalNotifier(modulePath, fnName) {
     return require(modulePath)[fnName];
   } catch (err) {
     if (err.code !== "MODULE_NOT_FOUND") throw err;
-    console.warn(`⚠️ ${modulePath} não encontrado - alertas por este canal desativados.`);
+    logger.warn(`⚠️ ${modulePath} não encontrado - alertas por este canal desativados.`);
     return async () => false;
   }
 }
@@ -19,9 +21,12 @@ const sendTeamsNotification = loadOptionalNotifier("./teamsService", "sendTeamsN
 // Envia o alerta por um canal sem deixar uma falha derrubar o processo
 async function safeNotify(channel, sendFn, reportText, threat) {
   try {
-    return await sendFn(reportText, threat);
+    const sent = await sendFn(reportText, threat);
+    recordAlert(channel, sent ? "sent" : "not_sent");
+    return sent;
   } catch (err) {
-    console.error(`Erro ao enviar alerta via ${channel}:`, err.message);
+    recordAlert(channel, "failed");
+    logger.error(`Erro ao enviar alerta via ${channel}:`, err.message);
     return false;
   }
 }
@@ -51,7 +56,7 @@ ${attack.url}`;
 }
 
 async function updateThreatsFromAPI() {
-  console.log("Fetching latest threats from ransomware tracking APIs...");
+  logger.info("Fetching latest threats from ransomware tracking APIs...");
 
   // Run both fetches in parallel so one timeout doesn't block the other
   const fetchRansomwareLive = async () => {
@@ -59,7 +64,7 @@ async function updateThreatsFromAPI() {
       const apiKey = process.env.RANSOMWARE_LIVE_API_KEY;
 
       if (!apiKey) {
-        console.warn(
+        logger.warn(
           "⚠️ API Key do Ransomware.Live PRO (RANSOMWARE_LIVE_API_KEY) não encontrada! Preencha no seu .env para usar a V3 (PRO).",
         );
         return;
@@ -99,11 +104,11 @@ async function updateThreatsFromAPI() {
         );
         count++;
       }
-      console.log(
+      logger.info(
         `✅ Ransomware.Live (API V3 - PRO): ${count} threats processed.`,
       );
     } catch (errRL) {
-      console.warn(
+      logger.warn(
         "⚠️ Ransomware.Live indisponível (API V3 - PRO):",
         errRL.response
           ? `${errRL.response.status} ${errRL.response.statusText}`
@@ -146,16 +151,16 @@ async function updateThreatsFromAPI() {
         );
         count++;
       }
-      console.log(`✅ RansomFeed: ${count} threats processed.`);
+      logger.info(`✅ RansomFeed: ${count} threats processed.`);
     } catch (errRF) {
-      console.error("❌ Error fetching from RansomFeed:", errRF.message);
+      logger.error("❌ Error fetching from RansomFeed:", errRF.message);
     }
   };
 
   // Execute both in parallel - neither blocks the other
   await Promise.allSettled([fetchRansomwareLive(), fetchRansomFeed()]);
 
-  console.log("Finished processing real threats from APIs.");
+  logger.info("Finished processing real threats from APIs.");
 }
 
 async function processThreatItem(
@@ -173,7 +178,7 @@ async function processThreatItem(
       [grupo, vitima],
       async (err, row) => {
         if (err) {
-          console.error("Error checking existing threat:", err);
+          logger.error("Error checking existing threat:", err);
           return resolve();
         }
 
@@ -205,7 +210,7 @@ async function processThreatItem(
             [grupo, vitima, data_incidente, pais, fonte, url, reportText],
             async function (err) {
               if (err) {
-                console.error("Error inserting threat:", err);
+                logger.error("Error inserting threat:", err);
                 return resolve();
               }
 
@@ -233,7 +238,7 @@ async function processThreatItem(
                     [newId],
                     (err) => {
                       if (err)
-                        console.error("Error updating email_sent status:", err);
+                        logger.error("Error updating email_sent status:", err);
                       resolve();
                     },
                   );

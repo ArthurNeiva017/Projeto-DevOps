@@ -1,0 +1,6 @@
+# Vulnerabilidades aceitas conscientemente (risk acceptance) - usadas pelo gate do Trivy.
+# Formato: um ID por linha (CVE-..., GHSA-..., AVD-DS-...), com justificativa e data de revisão.
+# Toda entrada precisa de justificativa e deve ser revisada a cada release.
+#
+# Exemplo:
+# CVE-2099-12345  # sem correção upstream; componente não exposto. Revisar em 2027-01-01

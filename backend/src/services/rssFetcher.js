@@ -1,4 +1,5 @@
 const rssParser = require('rss-parser');
+const logger = require('../observability/logger');
 const axios = require('axios');
 const db = require('../database/db');
 
@@ -16,7 +17,7 @@ const FEEDS = [
 ];
 
 async function updateNewsFromRSS() {
-    console.log('Fetching latest news from RSS feeds...');
+    logger.info('Fetching latest news from RSS feeds...');
 
     for (const feed of FEEDS) {
         try {
@@ -71,9 +72,9 @@ async function updateNewsFromRSS() {
         } catch (error) {
             // Se for do nosso amigo bloqueado, só avisa sem mandar erro vermelho
             if (error.response && error.response.status === 403) {
-                console.log(`[Aviso] ${feed.nome} está aguardando liberação do Cloudflare (403). Tentaremos novamente mais tarde.`);
+                logger.info(`[Aviso] ${feed.nome} está aguardando liberação do Cloudflare (403). Tentaremos novamente mais tarde.`);
             } else {
-                console.error(`Error fetching RSS from ${feed.nome}:`, error.message);
+                logger.error(`Error fetching RSS from ${feed.nome}:`, error.message);
             }
         }
     }

@@ -1,12 +1,17 @@
 name: CI/CD Pipeline
 
 # Fluxos deste pipeline:
-#   - push/PR na main ............ CI (testes + build + smoke test da imagem)
-#   - tag vX.Y.Z ................. CI + publicação no GHCR + deploy homologação -> produção
-#                                  (rollback automático se o health check falhar)
+#   - push/PR na main ............ CI (testes) + DevSecOps (SAST, SCA, segredos, IaC, contêiner)
+#                                  + teste de integração com a stack de observabilidade
+#   - tag vX.Y.Z ................. CI + DevSecOps + publicação no GHCR (com SBOM)
+#                                  + deploy homologação -> produção (rollback automático)
 #   - Run workflow (manual):
 #       operation=deploy  ........ igual à tag; rode sobre uma tag, com opção de simular falha
 #       operation=rollback ....... volta um ambiente para a versão informada
+#
+# Segurança da própria pipeline: todas as actions de terceiros são fixadas por SHA de
+# commit (tags são mutáveis - vide o incidente de supply chain do trivy-action, CVE-2026-33634)
+# e o Trivy roda pela imagem oficial com versão fixa.
 on:
   push:
     branches: [ "main" ]
@@ -40,6 +45,9 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  NODE_VERSION: "22"
+  TRIVY_IMAGE: aquasec/trivy:0.76.1
+  SEMGREP_VERSION: "1.182.1"
 
 concurrency:
   group: ci-cd-${{ github.ref }}-${{ inputs.operation || 'auto' }}
@@ -47,19 +55,26 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # CI
+  # CI - testes, build, scan do contêiner e integração (app + observabilidade)
   # ===========================================================================
   build-and-test:
+    name: Build, testes e integração
     if: github.event_name != 'workflow_dispatch' || inputs.operation == 'deploy'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      # Senha descartável, só para o Grafana efêmero do teste de integração
+      GRAFANA_ADMIN_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
@@ -71,17 +86,51 @@ jobs:
         working-directory: ./backend
         run: npm test
 
-      - name: Validate docker-compose.yml
-        run: docker compose config --quiet
+      - name: Publicar cobertura de testes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage
+          path: backend/coverage
+          retention-days: 14
+
+      - name: Validate docker-compose.yml (com e sem observabilidade)
+        run: |
+          docker compose config --quiet
+          docker compose --profile observability config --quiet
 
       - name: Build Docker Image
         run: docker build --build-arg APP_VERSION=ci --build-arg GIT_SHA=${{ github.sha }} -t cyber-threat-hub:ci .
+
+      # ---- DevSecOps: scan de vulnerabilidades da imagem ----
+      - name: Trivy - relatório SARIF da imagem
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/out" "$TRIVY_IMAGE" \
+            image --scanners vuln --format sarif --output /out/trivy-image.sarif cyber-threat-hub:ci
+
+      - name: Enviar resultados da imagem ao GitHub Security
+        if: always() && hashFiles('trivy-image.sarif') != ''
+        continue-on-error: true # PRs de forks não têm permissão de escrita
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+      - name: Trivy - gate da imagem (falha com HIGH/CRITICAL corrigíveis)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/.trivyignore:/.trivyignore:ro" "$TRIVY_IMAGE" \
+            image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /.trivyignore \
+            --exit-code 1 cyber-threat-hub:ci
 
       - name: Smoke test do container
         run: |
           docker run -d --name cth-ci -p 3001:3001 cyber-threat-hub:ci
           for i in $(seq 1 20); do
-            if curl -fsS http://localhost:3001/api/health; then exit 0; fi
+            if curl -fsS http://localhost:3001/api/health; then
+              # /metrics responde direto no container...
+              curl -fsS http://localhost:3001/metrics | grep -q http_requests_total
+              exit 0
+            fi
             sleep 3
           done
           docker logs cth-ci
@@ -95,24 +144,152 @@ jobs:
           image: cyber-threat-hub
           pull: "false"
 
+      - name: Nginx bloqueia /metrics para acesso externo
+        run: |
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/metrics)
+          echo "GET /metrics via nginx -> $STATUS"
+          [ "$STATUS" = "404" ]
+          curl -fsSI http://localhost:8081/ | grep -i content-security-policy
+
+      - name: Teste de integração da observabilidade (Prometheus + Loki + Alloy + Grafana)
+        env:
+          IMAGE_NAME: cyber-threat-hub
+          IMAGE_TAG: ci
+          HTTP_PORT: "8081"
+          GRAFANA_PORT: "3011"
+          PROMETHEUS_PORT: "9091"
+          GIT_SHA: ${{ github.sha }}
+        run: |
+          docker compose -p cth-homologacao --profile observability up -d --no-build --wait --wait-timeout 180
+          node scripts/gerar-trafego.js --url http://localhost:8081 --duracao 30 --rps 5 --erros 0.2
+          PROMETHEUS_URL=http://localhost:9091 GRAFANA_URL=http://localhost:3011 \
+            bash scripts/verificar-observabilidade.sh cth-homologacao
+
+      - name: Logs dos serviços (em caso de falha)
+        if: failure()
+        run: docker compose -p cth-homologacao --profile observability logs --tail 50 || true
+
       - name: Cleanup
         if: always()
         run: |
           docker rm -f cth-ci || true
-          docker compose -p cth-homologacao down -v || true
+          docker compose -p cth-homologacao --profile observability down -v || true
 
   # ===========================================================================
-  # CD - publicação da imagem (somente em tags vX.Y.Z)
+  # DevSecOps - SAST, dependências (SCA), segredos e IaC
+  # ===========================================================================
+  security-scan:
+    name: DevSecOps (SAST + SCA + segredos + IaC)
+    if: github.event_name != 'workflow_dispatch' || inputs.operation == 'deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # ---- SCA: vulnerabilidades conhecidas nas dependências npm ----
+      - name: SCA - npm audit (dependências de produção, falha com HIGH/CRITICAL)
+        working-directory: ./backend
+        run: npm audit --omit=dev --audit-level=high
+
+      # ---- SAST: análise estática do código (Semgrep) ----
+      - name: SAST - Semgrep
+        env:
+          SEMGREP_SEND_METRICS: "off"
+        run: |
+          pipx install "semgrep==${SEMGREP_VERSION}"
+          semgrep scan \
+            --config p/javascript --config p/nodejs --config p/owasp-top-ten \
+            --config p/secrets --config p/dockerfile \
+            --metrics off \
+            --sarif-output=semgrep.sarif --json-output=semgrep.json
+          # Gate: bloqueia achados ERROR/HIGH/CRITICAL (os demais vão para o GitHub Security)
+          ERRORS=$(jq '[.results[] | select(.extra.severity | IN("ERROR", "HIGH", "CRITICAL"))] | length' semgrep.json)
+          TOTAL=$(jq '.results | length' semgrep.json)
+          {
+            echo "### 🔍 Semgrep (SAST)"
+            echo "Achados: **$TOTAL** (bloqueantes - ERROR/HIGH/CRITICAL: **$ERRORS**)"
+            jq -r '.results[] | "- `\(.extra.severity)` \(.check_id | split(".") | last) - \(.path):\(.start.line)"' semgrep.json
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$ERRORS" -eq 0 ] || { echo "::error::Semgrep encontrou $ERRORS achado(s) bloqueante(s)"; exit 1; }
+
+      - name: Enviar resultados do Semgrep ao GitHub Security
+        if: always() && hashFiles('semgrep.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      # ---- Trivy no repositório: dependências, segredos e misconfig (Dockerfile) ----
+      - name: Trivy - relatório SARIF do repositório
+        if: always()
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$TRIVY_IMAGE" \
+            fs --scanners vuln,secret,misconfig --skip-dirs backend/node_modules \
+            --format sarif --output /src/trivy-fs.sarif .
+
+      - name: Enviar resultados do Trivy ao GitHub Security
+        if: always() && hashFiles('trivy-fs.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+      - name: Trivy - gate (vulnerabilidades corrigíveis, segredos e misconfig HIGH/CRITICAL)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$TRIVY_IMAGE" \
+            fs --scanners vuln,secret,misconfig --skip-dirs backend/node_modules \
+            --severity HIGH,CRITICAL --ignore-unfixed --ignorefile .trivyignore \
+            --exit-code 1 .
+
+  # ===========================================================================
+  # DevSecOps - SAST semântico com CodeQL (JavaScript e workflows do Actions)
+  # ===========================================================================
+  codeql:
+    name: SAST (CodeQL - ${{ matrix.language }})
+    if: github.event_name != 'workflow_dispatch' || inputs.operation == 'deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ javascript-typescript, actions ]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Inicializar CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Análise CodeQL
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: codeql-${{ matrix.language }}
+
+  # ===========================================================================
+  # CD - publicação da imagem (somente em tags vX.Y.Z), com SBOM
   # ===========================================================================
   build-and-push:
-    needs: build-and-test
+    needs: [build-and-test, security-scan, codeql]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.vars.outputs.version }}
       image: ${{ steps.vars.outputs.image }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Definir versão e nome da imagem
         id: vars
@@ -126,7 +303,7 @@ jobs:
 
       - name: Gerar tags SemVer da imagem
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: ${{ steps.vars.outputs.image }}
           tags: |
@@ -135,17 +312,17 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,prefix=sha-
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Login no GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build e push da imagem
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           push: true
@@ -157,6 +334,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # SBOM (inventário de componentes) da imagem publicada, anexado ao GitHub Release
+      - name: Gerar SBOM (CycloneDX) da imagem publicada
+        env:
+          IMAGE_REF: ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.version }}
+        run: |
+          docker pull "$IMAGE_REF"
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/out" "$TRIVY_IMAGE" \
+            image --format cyclonedx --output /out/sbom.cdx.json "$IMAGE_REF"
+
+      - name: Publicar SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom
+          path: sbom.cdx.json
+
       - name: Resumo
         run: |
           {
@@ -164,6 +356,7 @@ jobs:
             echo '```'
             echo "${{ steps.meta.outputs.tags }}"
             echo '```'
+            echo "SBOM CycloneDX gerado: $(jq '.components | length' sbom.cdx.json) componentes"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================================================
@@ -171,7 +364,9 @@ jobs:
   # ===========================================================================
   deploy-homologacao:
     needs: build-and-push
-    runs-on: ubuntu-latest
+    # Variável de repositório DEPLOY_RUNNER permite usar um runner self-hosted (ex.: a
+    # máquina da apresentação) para que o ambiente e o Grafana fiquem acessíveis na demo.
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
     environment:
       name: homologacao
       url: http://localhost:8081
@@ -179,6 +374,7 @@ jobs:
       IMAGE_NAME: ${{ needs.build-and-push.outputs.image }}
       VERSION: ${{ needs.build-and-push.outputs.version }}
       DEPLOY_ENV: homologacao
+      OBSERVABILITY: ${{ vars.DEPLOY_OBSERVABILITY || 'true' }}
       # Segredos do environment "homologacao" (Settings > Environments)
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -190,13 +386,15 @@ jobs:
       RANSOMWARE_LIVE_API_KEY: ${{ secrets.RANSOMWARE_LIVE_API_KEY }}
       CVEFEED_API_KEY: ${{ secrets.CVEFEED_API_KEY }}
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0   # necessário para listar as tags anteriores
+          clean: false     # preserva .deploy/ (estado do ambiente) em runners self-hosted
 
       - name: Login no GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -232,6 +430,7 @@ jobs:
           environment: ${{ env.DEPLOY_ENV }}
           image: ${{ env.IMAGE_NAME }}
           simulate-failure: ${{ inputs.simulate_failure && 'true' || 'false' }}
+          observability: ${{ env.OBSERVABILITY }}
 
       # Versão de destino = última que passou no health check (.deploy/<env>/current)
       - name: Preparar rollback
@@ -256,6 +455,7 @@ jobs:
           version: ${{ steps.rollback-target.outputs.version }}
           environment: ${{ env.DEPLOY_ENV }}
           image: ${{ env.IMAGE_NAME }}
+          observability: ${{ env.OBSERVABILITY }}
 
       - name: Resumo do deploy
         if: always()
@@ -284,7 +484,7 @@ jobs:
   # ===========================================================================
   deploy-producao:
     needs: [build-and-push, deploy-homologacao]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
     # Configure "Required reviewers" neste environment para exigir aprovação manual
     environment:
       name: producao
@@ -293,6 +493,7 @@ jobs:
       IMAGE_NAME: ${{ needs.build-and-push.outputs.image }}
       VERSION: ${{ needs.build-and-push.outputs.version }}
       DEPLOY_ENV: producao
+      OBSERVABILITY: ${{ vars.DEPLOY_OBSERVABILITY || 'true' }}
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT }}
       SMTP_USER: ${{ secrets.SMTP_USER }}
@@ -303,13 +504,15 @@ jobs:
       RANSOMWARE_LIVE_API_KEY: ${{ secrets.RANSOMWARE_LIVE_API_KEY }}
       CVEFEED_API_KEY: ${{ secrets.CVEFEED_API_KEY }}
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          clean: false
 
       - name: Login no GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -344,6 +547,7 @@ jobs:
           version: ${{ env.VERSION }}
           environment: ${{ env.DEPLOY_ENV }}
           image: ${{ env.IMAGE_NAME }}
+          observability: ${{ env.OBSERVABILITY }}
 
       # Versão de destino = última que passou no health check (.deploy/<env>/current)
       - name: Preparar rollback
@@ -368,6 +572,7 @@ jobs:
           version: ${{ steps.rollback-target.outputs.version }}
           environment: ${{ env.DEPLOY_ENV }}
           image: ${{ env.IMAGE_NAME }}
+          observability: ${{ env.OBSERVABILITY }}
 
       - name: Resumo do deploy
         if: always()
@@ -392,7 +597,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ===========================================================================
-  # Release - publica o GitHub Release da versão após produção OK
+  # Release - publica o GitHub Release da versão (com SBOM) após produção OK
   # ===========================================================================
   release:
     needs: [build-and-push, deploy-producao]
@@ -400,6 +605,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Baixar SBOM
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: sbom
+
       - name: Criar GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -409,20 +619,21 @@ jobs:
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "Release v$VERSION já existe."; exit 0
           fi
-          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --generate-notes \
+          gh release create "v$VERSION" sbom.cdx.json --repo "$GITHUB_REPOSITORY" --generate-notes \
             --title "v$VERSION" \
-            --notes "Imagem: $IMAGE:$VERSION (implantada em homologação e produção)"
+            --notes "Imagem: $IMAGE:$VERSION (implantada em homologação e produção). SBOM CycloneDX anexado."
 
   # ===========================================================================
   # Rollback manual (Run workflow > operation = rollback)
   # ===========================================================================
   rollback:
     if: github.event_name == 'workflow_dispatch' && inputs.operation == 'rollback'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
     environment: ${{ inputs.environment }}
     env:
       VERSION: ${{ inputs.version }}
       DEPLOY_ENV: ${{ inputs.environment }}
+      OBSERVABILITY: ${{ vars.DEPLOY_OBSERVABILITY || 'true' }}
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT }}
       SMTP_USER: ${{ secrets.SMTP_USER }}
@@ -433,8 +644,11 @@ jobs:
       RANSOMWARE_LIVE_API_KEY: ${{ secrets.RANSOMWARE_LIVE_API_KEY }}
       CVEFEED_API_KEY: ${{ secrets.CVEFEED_API_KEY }}
       TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+      GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          clean: false
 
       - name: Validar versão
         run: |
@@ -446,7 +660,7 @@ jobs:
           echo "IMAGE_NAME=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
       - name: Login no GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -461,6 +675,7 @@ jobs:
           version: ${{ env.VERSION }}
           environment: ${{ env.DEPLOY_ENV }}
           image: ${{ env.IMAGE_NAME }}
+          observability: ${{ env.OBSERVABILITY }}
 
       - name: Resumo do rollback
         run: |
